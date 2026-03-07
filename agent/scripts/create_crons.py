@@ -33,8 +33,10 @@ CRONS = [
         "message": (
             "Run the morning research loop. Execute this phase only:\n\n"
             "1. **Research** — Read /skills/research/SKILL.md and execute the research phase\n\n"
+            "IMPORTANT: Start by loading all your memory and reading your last 3 journal entries "
+            "so you know what you already did and what's changed.\n\n"
             "This is a scouting run — gather intelligence on market health, "
-            "check earnings calendar, scan for developments. "
+            "check earnings calendar, react to any post-earnings fundamental changes. "
             "Adjust depth based on your current agent_stage (explore/balanced/exploit). "
             "Do NOT execute trades or analysis."
         ),
@@ -46,7 +48,10 @@ CRONS = [
             "Run the midday research + analysis loop. Execute these phases:\n\n"
             "1. **Research** — Read /skills/research/SKILL.md and execute the research phase\n"
             "2. **Analysis** — Read /skills/analysis/SKILL.md and analyze candidates from your research\n\n"
-            "Focus on deep company analysis (1-2 stocks based on stage). "
+            "IMPORTANT: Start by loading all your memory and reading your last 3 journal entries "
+            "so you build on the morning's work instead of repeating it.\n\n"
+            "Focus on deep fundamental analysis (1-2 stocks based on stage). "
+            "Ground your thesis in revenue trends, margins, competitive position. "
             "Set or update price targets on the watchlist for every stock you analyze. "
             "Do NOT execute trades."
         ),
@@ -56,17 +61,20 @@ CRONS = [
         "schedule": "0 20 * * 1-5",
         "message": (
             "Run the end-of-day execution + reflection loop. Execute these phases:\n\n"
+            "IMPORTANT: Start by loading all your memory and reading today's journal entries "
+            "so you have full context from the morning and midday runs.\n\n"
             "1. **Trade Execution** — Read /skills/trade-execution/SKILL.md\n"
             "   - Check watchlist price targets against current prices\n"
             "   - Only trade stocks where current_price <= target_entry\n"
-            "   - Manage existing positions first (cut losers, trim winners)\n"
+            "   - Manage existing positions: if fundamentals deteriorated (bad earnings), consider selling. "
+            "If stock is down but fundamentals intact, consider DCA instead of panic selling.\n"
             "   - Respect your stage's minimum confidence threshold\n"
             "2. **Reflection** — Read /skills/reflection/SKILL.md\n"
             "   - Daily reflection on today's activity\n"
             "   - Update stage counters (cycles_completed, watchlist_profiles, total_trades)\n"
             "   - Check stage transition thresholds\n\n"
             "Remember: doing nothing is the default. Only trade if price targets are hit "
-            "and you have conviction from today's research and analysis."
+            "and you have conviction grounded in strong fundamentals."
         ),
     },
     {

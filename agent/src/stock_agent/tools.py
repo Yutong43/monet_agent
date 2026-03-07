@@ -5,6 +5,8 @@ import os
 from datetime import datetime, timedelta
 from typing import Literal
 
+import time
+
 import pandas as pd
 import yfinance as yf
 from alpaca.trading.requests import MarketOrderRequest, LimitOrderRequest
@@ -716,6 +718,16 @@ def earnings_calendar(symbols: list[str] | None = None, days_ahead: int = 30) ->
     # Flag earnings within 5 days
     imminent = [e for e in upcoming if e.get("days_until", 999) <= 5]
 
+    # Persist upcoming earnings to memory so the web UI calendar can display them
+    if upcoming:
+        try:
+            db_write_memory("upcoming_earnings", {
+                "events": upcoming,
+                "fetched_at": today.strftime("%Y-%m-%d %H:%M"),
+            })
+        except Exception:
+            logger.warning("Failed to persist upcoming_earnings to memory")
+
     return {
         "symbols_checked": symbols,
         "upcoming_earnings": upcoming,
@@ -889,6 +901,28 @@ def place_order(
         "status": str(order.status),
     })
 
+    # Poll for fill (up to 10s for market orders, skip for limit)
+    filled_avg_price = None
+    filled_qty = None
+    final_status = str(order.status)
+    if order_type == "market":
+        for _ in range(5):
+            time.sleep(2)
+            try:
+                refreshed = client.get_order_by_id(str(order.id))
+                final_status = str(refreshed.status)
+                if refreshed.filled_avg_price is not None:
+                    filled_avg_price = float(refreshed.filled_avg_price)
+                    filled_qty = float(refreshed.filled_qty)
+                    update_trade(trade["id"], {
+                        "status": final_status,
+                        "filled_avg_price": filled_avg_price,
+                        "filled_quantity": filled_qty,
+                    })
+                    break
+            except Exception:
+                pass
+
     return {
         "trade_id": trade["id"],
         "broker_order_id": str(order.id),
@@ -896,7 +930,9 @@ def place_order(
         "side": side,
         "quantity": quantity,
         "order_type": order_type,
-        "status": str(order.status),
+        "status": final_status,
+        "filled_avg_price": filled_avg_price,
+        "filled_quantity": filled_qty,
         "risk_metrics": risk.get("metrics", {}),
     }
 
@@ -914,6 +950,25 @@ def read_agent_memory(key: str) -> dict:
     if result:
         return {"key": key, "value": result["value"], "updated_at": result["updated_at"]}
     return {"key": key, "value": None}
+
+
+def read_all_agent_memory() -> dict:
+    """Read all persistent memory entries at once.
+
+    Use this at the start of each loop to load full context efficiently,
+    instead of reading keys one at a time.
+
+    Returns:
+        Dict mapping memory keys to their values and timestamps.
+    """
+    rows = read_all_memory()
+    return {
+        "memories": {
+            row["key"]: {"value": row["value"], "updated_at": row.get("updated_at")}
+            for row in rows
+        },
+        "count": len(rows),
+    }
 
 
 def write_agent_memory(key: str, value: dict) -> dict:
@@ -1089,6 +1144,7 @@ AUTONOMOUS_TOOLS = [
     market_breadth,
     place_order,
     read_agent_memory,
+    read_all_agent_memory,
     write_agent_memory,
     write_journal_entry,
     manage_watchlist,

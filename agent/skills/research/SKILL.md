@@ -2,9 +2,16 @@
 
 You are conducting the **research phase** of your autonomous trading loop.
 
+## Step 0: Load Context (ALWAYS DO THIS FIRST)
+
+Before anything else, load your full memory and recent history:
+1. Run `read_all_agent_memory()` to load all persistent beliefs at once
+2. Read your last 3 journal entries: `query_database("SELECT entry_type, title, content, symbols, created_at FROM agent_journal ORDER BY created_at DESC LIMIT 3")`
+3. This tells you what you already know, what you did last run, and avoids repeating work
+
 ## Stage-Aware Behavior
 
-Before doing anything, read `agent_stage` from memory using `read_agent_memory("agent_stage")`. Your research depth depends on your current lifecycle stage:
+Your research depth depends on your current lifecycle stage (from `agent_stage` in memory):
 
 | Stage | Screen Frequency | Deep Dives / Day | Watchlist Focus |
 |-------|-----------------|-------------------|-----------------|
@@ -23,10 +30,18 @@ Build deep, structured market intelligence using quantitative tools. No guessing
 - Get quotes for SPY, QQQ, and VIX to confirm directional bias
 - **Event override**: If VIX > 30, flag this as a high-volatility event — temporarily boost research depth regardless of stage
 
-### 2. Portfolio & Watchlist Event Check (every loop, every stage)
+### 2. Portfolio & Earnings Check (every loop, every stage)
+- Run `get_portfolio_state` to see current positions and their P&L
+- **Position health**: For every held position, check if the fundamental thesis is still intact. If a stock just reported earnings, this is critical — read the latest news.
 - Run `earnings_calendar()` with no arguments (auto-checks watchlist + positions)
-- **Flag any earnings within 5 days** — these need immediate attention in the analysis phase
-- Note upcoming catalysts that could affect existing positions
+- **Flag any earnings within 7 days** — these need immediate attention
+- **Post-earnings reaction**: If any held stock or watchlist stock reported earnings in the last 3 days, immediately research the results:
+  - Use `internet_search("[SYMBOL] earnings results Q[X] [year]")` to get actual numbers
+  - Run `fundamental_analysis(symbol)` to see updated metrics
+  - Compare actual results to your thesis in `watchlist_rationale_{SYMBOL}`
+  - If fundamentals changed materially (revenue miss >5%, guidance cut, margin compression), flag for action in trade phase
+  - If fundamentals improved (beat + raise, margin expansion, acceleration), flag as potential DCA/add opportunity
+  - Write findings to memory as `earnings_reaction_{SYMBOL}`
 
 ### 3. Deep Company Research (stage-dependent)
 - **Explore stage**: Pick 2+ symbols from your watchlist that lack a recent `company_profile_{SYMBOL}` memory (or has one older than 7 days). Run `company_profile` and `peer_comparison` for each. Store results in memory.
@@ -41,7 +56,7 @@ Build deep, structured market intelligence using quantitative tools. No guessing
   - Transitional → "quality" (resilient companies)
   - For any interesting results, run `company_profile` before adding to watchlist
   - Update `last_screen_date` in memory
-- **Balanced stage**: Check `read_agent_memory("last_screen_date")` — only screen if it's been more than 3 days
+- **Balanced stage**: Check `last_screen_date` — only screen if it's been more than 3 days
 - **Exploit stage**: Skip screening entirely unless you have fewer than 3 watchlist items or just exited a position
 
 ### 5. Targeted News (only for specific events)
@@ -52,7 +67,7 @@ Build deep, structured market intelligence using quantitative tools. No guessing
 - Write a journal entry of type "research" summarizing:
   - Market regime and rotation signal
   - Key sector moves
-  - Any earnings alerts
+  - Any earnings alerts or post-earnings reactions
   - Company deep-dive findings (if done)
   - Screen results (if done)
   - Current stage and how it influenced research depth
@@ -64,3 +79,4 @@ Build deep, structured market intelligence using quantitative tools. No guessing
 - Do NOT add to watchlist without `company_profile` first
 - Do NOT rely on news articles for stock selection — use quantitative data
 - Do NOT skip `market_breadth` and `sector_analysis` — these set the context for everything else
+- Do NOT ignore post-earnings fundamental changes — these are the most important signals

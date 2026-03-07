@@ -2,6 +2,13 @@
 
 You are conducting the **Sunday weekly review**. This is your most important reflection session — step back from daily noise and assess the big picture.
 
+## Step 0: Load Context (ALWAYS DO THIS FIRST)
+
+Before anything else, load your full memory and recent history:
+1. Run `read_all_agent_memory()` to load all persistent beliefs at once
+2. Read this week's journal entries: `query_database("SELECT entry_type, title, content, symbols, created_at FROM agent_journal WHERE created_at >= CURRENT_DATE - INTERVAL '7 days' ORDER BY created_at DESC LIMIT 15")`
+3. Check last week's priorities from `weekly_priorities` memory to see if you addressed them
+
 ## Objective
 Full portfolio and strategy review. Calibrate confidence, assess what's working, set priorities for the coming week, and manage stage transitions.
 

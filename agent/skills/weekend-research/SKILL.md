@@ -2,9 +2,16 @@
 
 You are conducting the **Saturday batch research** session. Markets are closed — this is your time for deep, unhurried analysis.
 
+## Step 0: Load Context (ALWAYS DO THIS FIRST)
+
+Before anything else, load your full memory and recent history:
+1. Run `read_all_agent_memory()` to load all persistent beliefs at once
+2. Read this week's journal entries: `query_database("SELECT entry_type, title, content, symbols, created_at FROM agent_journal WHERE created_at >= CURRENT_DATE - INTERVAL '5 days' ORDER BY created_at DESC LIMIT 10")`
+3. This tells you what happened this week and what needs deeper investigation
+
 ## Stage-Aware Behavior
 
-Read `agent_stage` from memory using `read_agent_memory("agent_stage")`. Weekend research depth scales with stage:
+Your research depth depends on your current lifecycle stage (from `agent_stage` in memory):
 
 | Stage | Companies to Profile | Sector Analysis | Watchlist Review |
 |-------|---------------------|-----------------|-----------------|

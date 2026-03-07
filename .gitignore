@@ -34,5 +34,8 @@ out/
 .DS_Store
 Thumbs.db
 
+# LangGraph local dev cache
+.langgraph_api/
+
 # Supabase
 supabase/.temp/

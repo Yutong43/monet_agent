@@ -1,17 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { createClient } from "@/lib/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-
-interface MemoryRow {
-  key: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  value: any;
-}
 
 interface WatchlistRow {
   id: string;
@@ -19,14 +11,6 @@ interface WatchlistRow {
   thesis: string;
   target_entry: number | null;
   target_exit: number | null;
-  created_at: string;
-}
-
-interface JournalEntry {
-  id: string;
-  title: string;
-  content: string;
-  created_at: string;
 }
 
 const MEMORY_KEYS = [
@@ -37,119 +21,127 @@ const MEMORY_KEYS = [
   "weekly_priorities",
 ];
 
-function SectionSkeleton() {
-  return (
-    <Card>
-      <CardHeader>
-        <Skeleton className="h-5 w-40" />
-      </CardHeader>
-      <CardContent className="space-y-2">
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-4 w-3/4" />
-        <Skeleton className="h-4 w-5/6" />
-      </CardContent>
-    </Card>
-  );
-}
+const SKILLS = [
+  "Market Research",
+  "Technical Analysis",
+  "Fundamental Analysis",
+  "Earnings Tracking",
+  "Sector Rotation",
+  "Stock Screening",
+  "Peer Comparison",
+  "Price Target Setting",
+  "Risk Management",
+  "Position Sizing",
+  "DCA Strategy",
+  "Portfolio Rebalancing",
+  "Company Profiling",
+  "Market Breadth",
+];
 
-/** Convert a JSONB memory value into a readable markdown string. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function formatMemoryValue(value: any): string {
-  if (typeof value === "string") return value;
-  if (value == null) return "";
+function buildBio(memories: Record<string, any>, watchlist: WatchlistRow[]): string {
+  const strategy = memories.strategy;
+  const risk = memories.risk_appetite;
+  const outlook = memories.market_outlook;
+  const rawStage = memories.agent_stage;
+  const stage = typeof rawStage === "string" ? rawStage : rawStage?.stage ?? null;
+  const priorities = memories.weekly_priorities;
 
-  // If it has a "summary" field, lead with that
-  const parts: string[] = [];
-  if (value.summary) parts.push(value.summary);
+  const paragraphs: string[] = [];
 
-  for (const [k, v] of Object.entries(value)) {
-    if (k === "summary" || k === "last_updated" || k === "validated") continue;
-    if (Array.isArray(v)) {
-      parts.push(`**${k.replace(/_/g, " ")}**: ${v.join(", ")}`);
-    } else if (typeof v === "object" && v !== null) {
-      // Nested object — format as sub-items
-      const sub = Object.entries(v)
-        .map(([sk, sv]) => `${sk.replace(/_/g, " ")}: ${sv}`)
-        .join("; ");
-      parts.push(`**${k.replace(/_/g, " ")}**: ${sub}`);
-    } else if (typeof v === "string" || typeof v === "number") {
-      parts.push(`**${k.replace(/_/g, " ")}**: ${v}`);
-    }
-  }
-  return parts.join("\n\n");
-}
-
-function MemorySection({ title, content }: { title: string; content: unknown }) {
-  if (!content) return null;
-  const text = formatMemoryValue(content);
-  if (!text) return null;
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-lg">{title}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="journal-prose max-w-none text-sm">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
-        </div>
-      </CardContent>
-    </Card>
+  // Paragraph 1: Identity & what I do
+  const themes = strategy?.core_themes;
+  const themeStr = Array.isArray(themes) && themes.length > 0
+    ? themes.slice(0, 3).map((t: string) => t.split("(")[0].trim().toLowerCase()).join(", ")
+    : "quality growth stocks with strong fundamentals";
+  const approach = strategy?.summary
+    ? strategy.summary
+    : "I focus on finding quality companies with strong fundamentals and favorable technicals, aiming to beat the S&P 500 consistently through disciplined risk management.";
+  paragraphs.push(
+    `My name is **Monet**. I'm an autonomous AI investor specializing in ${themeStr}. ${approach}`
   );
-}
 
-const stageLabels: Record<string, { label: string; color: string }> = {
-  explore: {
-    label: "Explore",
-    color: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-  },
-  balanced: {
-    label: "Balanced",
-    color: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
-  },
-  exploit: {
-    label: "Exploit",
-    color: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-  },
-};
+  // Paragraph 2: Philosophy & risk
+  const riskLevel = risk?.level ?? "moderate";
+  const riskSummary = risk?.summary ?? "";
+  const holdPeriod = strategy?.target_hold_period ?? "6-12 months";
+  const maxPos = strategy?.max_positions ?? "5-8";
+  const discipline = strategy?.entry_discipline ?? "";
+  paragraphs.push(
+    `My risk appetite is **${riskLevel}**. ${riskSummary ? riskSummary + " " : ""}` +
+    `I hold positions for ${holdPeriod}, running ${maxPos} positions max.` +
+    (discipline ? ` ${discipline}` : "")
+  );
+
+  // Paragraph 3: Current market read & stage
+  if (outlook) {
+    const regime = outlook.regime ?? "uncertain";
+    const vix = outlook.vix ? `VIX at ${outlook.vix}` : "";
+    const interp = outlook.interpretation ?? "";
+    const stageLabel = stage === "explore"
+      ? "I'm currently in my **explore** phase — screening aggressively, building my watchlist, and rarely trading."
+      : stage === "balanced"
+        ? "I'm in my **balanced** phase — actively refining targets and trading when setups align."
+        : stage === "exploit"
+          ? "I'm in my **exploit** phase — focused on managing positions and harvesting returns."
+          : "";
+
+    paragraphs.push(
+      `Right now, my read on the market is **${regime}**${vix ? ` (${vix})` : ""}. ${interp}` +
+      (stageLabel ? ` ${stageLabel}` : "")
+    );
+  }
+
+  // Paragraph 4: What I'm watching & priorities
+  const watchSymbols = watchlist.map((w) => `**${w.symbol}**`);
+  const priList = priorities?.priorities;
+  if (watchSymbols.length > 0 || priList) {
+    let p4 = "";
+    if (watchSymbols.length > 0) {
+      p4 += `I'm currently watching ${watchSymbols.join(", ")}. `;
+    }
+    if (Array.isArray(priList) && priList.length > 0) {
+      p4 += `My priorities this week: ${priList.slice(0, 3).join("; ")}.`;
+    } else if (watchlist.length > 0) {
+      const nearest = watchlist.find((w) => w.target_entry);
+      if (nearest) {
+        p4 += `Nearest entry target: ${nearest.symbol} at $${nearest.target_entry}.`;
+      }
+    }
+    if (p4) paragraphs.push(p4);
+  }
+
+  return paragraphs.join("\n\n");
+}
 
 export function AboutMeSection() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [memories, setMemories] = useState<Record<string, any>>({});
   const [watchlist, setWatchlist] = useState<WatchlistRow[]>([]);
-  const [latestReflection, setLatestReflection] = useState<JournalEntry | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
       const supabase = createClient();
 
-      const [memRes, watchRes, reflRes] = await Promise.all([
+      const [memRes, watchRes] = await Promise.all([
         supabase
           .from("agent_memory")
           .select("key, value")
           .in("key", MEMORY_KEYS),
         supabase
           .from("watchlist")
-          .select("*")
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("agent_journal")
-          .select("id, title, content, created_at")
-          .eq("entry_type", "reflection")
-          .order("created_at", { ascending: false })
-          .limit(1),
+          .select("id, symbol, thesis, target_entry, target_exit")
+          .order("added_at", { ascending: false }),
       ]);
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const memMap: Record<string, any> = {};
-      for (const row of (memRes.data ?? []) as MemoryRow[]) {
-        memMap[row.key] = row.value;
+      for (const row of memRes.data ?? []) {
+        memMap[(row as { key: string }).key] = (row as { value: unknown }).value;
       }
       setMemories(memMap);
       setWatchlist((watchRes.data ?? []) as WatchlistRow[]);
-      setLatestReflection(
-        (reflRes.data?.[0] as JournalEntry | undefined) ?? null,
-      );
       setLoading(false);
     }
     load();
@@ -157,106 +149,61 @@ export function AboutMeSection() {
 
   if (loading) {
     return (
-      <div className="space-y-4">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <SectionSkeleton key={i} />
-        ))}
-      </div>
+      <Card>
+        <CardContent className="p-8 space-y-4">
+          <Skeleton className="h-5 w-48" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-3/4" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-5/6" />
+        </CardContent>
+      </Card>
     );
   }
 
-  const rawStage = memories.agent_stage;
-  const stage = typeof rawStage === "string" ? rawStage : rawStage?.stage ?? rawStage?.value ?? null;
-  const stageInfo = stage ? stageLabels[stage] ?? { label: stage, color: "bg-muted text-muted-foreground" } : null;
+  const bio = buildBio(memories, watchlist);
+
+  if (!bio) {
+    return (
+      <p className="text-center text-muted-foreground py-8">
+        Monet hasn&apos;t built its profile yet.
+      </p>
+    );
+  }
 
   return (
-    <div className="space-y-4">
-      <MemorySection title="Identity & Strategy" content={memories.strategy} />
+    <div className="space-y-6">
+      <Card>
+        <CardContent className="px-8 py-10">
+          <div className="max-w-2xl space-y-5 text-[15px] leading-7 text-foreground/90">
+            {bio.split("\n\n").map((paragraph, i) => (
+              <p key={i} dangerouslySetInnerHTML={{ __html: formatBold(paragraph) }} />
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
-      <MemorySection title="Investment Philosophy & Risk Appetite" content={memories.risk_appetite} />
-
-      {stageInfo && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Current Stage</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <span className={`inline-block rounded-full px-3 py-1 text-sm font-medium ${stageInfo.color}`}>
-              {stageInfo.label}
+      <div className="px-1">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+          What I can do
+        </h3>
+        <div className="flex flex-wrap gap-2">
+          {SKILLS.map((skill) => (
+            <span
+              key={skill}
+              className="rounded-full border px-3 py-1 text-xs text-muted-foreground"
+            >
+              {skill}
             </span>
-            <p className="mt-2 text-sm text-muted-foreground">
-              {stage === "explore" && "Screening aggressively, building watchlist, rarely trading."}
-              {stage === "balanced" && "Maintaining research cadence, actively checking price targets, trading at 0.6+ confidence."}
-              {stage === "exploit" && "Focusing on position management, researching only for new catalysts."}
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
-      <MemorySection title="Market Outlook" content={memories.market_outlook} />
-
-      <MemorySection title="Weekly Priorities" content={memories.weekly_priorities} />
-
-      {watchlist.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Watchlist</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {watchlist.map((item) => (
-                <div key={item.id} className="flex items-start gap-3 rounded-lg border p-3">
-                  <span className="rounded bg-muted px-2 py-0.5 text-sm font-mono font-semibold">
-                    {item.symbol}
-                  </span>
-                  <div className="flex-1 text-sm">
-                    <p>{item.thesis}</p>
-                    {(item.target_entry || item.target_exit) && (
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {item.target_entry && `Entry: $${item.target_entry}`}
-                        {item.target_entry && item.target_exit && " | "}
-                        {item.target_exit && `Exit: $${item.target_exit}`}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {latestReflection && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-lg">Latest Reflection</CardTitle>
-              <span className="text-xs text-muted-foreground">
-                {new Date(latestReflection.created_at).toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </span>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <p className="mb-2 font-medium text-sm">{latestReflection.title}</p>
-            <div className="journal-prose max-w-none text-sm">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {latestReflection.content}
-              </ReactMarkdown>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {!memories.strategy && !memories.risk_appetite && !memories.market_outlook && watchlist.length === 0 && !latestReflection && (
-        <p className="text-center text-muted-foreground py-8">
-          No data yet. Monet hasn&apos;t built its profile.
-        </p>
-      )}
+          ))}
+        </div>
+      </div>
     </div>
   );
+}
+
+/** Convert **text** markdown bold to <strong> tags for dangerouslySetInnerHTML. */
+function formatBold(text: string): string {
+  return text.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
 }

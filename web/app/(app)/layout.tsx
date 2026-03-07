@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { BarChart3, Bot, BookOpen, Activity, LogOut } from "lucide-react";
+import { BarChart3, Bot, BookOpen, Activity, LogOut, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
+import { EventCalendar } from "@/components/trading/event-calendar";
 
 const navItems = [
+  { href: "/about", label: "About Me", icon: User },
   { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
   { href: "/chat", label: "Chat", icon: Bot },
   { href: "/journal", label: "Journal", icon: BookOpen },
@@ -30,7 +32,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="flex h-14 items-center border-b px-4">
           <h2 className="font-semibold text-sm">Monet Agent</h2>
         </div>
-        <nav className="flex flex-1 flex-col gap-1 p-2">
+        <nav className="flex flex-col gap-1 p-2">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = pathname.startsWith(item.href);
@@ -50,6 +52,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
+        <div className="flex-1 overflow-y-auto border-t">
+          <EventCalendar />
+        </div>
         <div className="border-t p-2">
           <Button variant="ghost" className="w-full justify-start gap-2 text-sm" onClick={handleSignOut}>
             <LogOut className="size-4" />

@@ -1,6 +1,7 @@
 """Risk management engine."""
 
 import logging
+from datetime import datetime, timedelta
 
 from stock_agent.db import get_risk_settings
 from stock_agent.market_data import get_portfolio, get_quote
@@ -74,20 +75,40 @@ def check_risk(symbol: str, side: str, quantity: float, limit_price: float | Non
             "metrics": {"daily_pnl": daily_pnl, "max_daily_loss": max_daily_loss},
         }
 
-    # Check 4: Sufficient buying power
-    if side == "buy" and trade_value > portfolio["buying_power"]:
+    # Check 4: Sufficient cash (use actual cash, not margin buying power)
+    cash = portfolio["cash"]
+    if side == "buy" and trade_value > cash:
         return {
             "approved": False,
-            "reason": f"Insufficient buying power. Need {trade_value:.2f}, have {portfolio['buying_power']:.2f}",
+            "reason": f"Insufficient cash. Need {trade_value:.2f}, have {cash:.2f} (not using margin)",
         }
+
+    # Check 5: Earnings proximity warning
+    earnings_warning = None
+    try:
+        from stock_agent.finnhub_client import get_finnhub
+        fh = get_finnhub()
+        today = datetime.now()
+        cal = fh.earnings_calendar(
+            _from=today.strftime("%Y-%m-%d"),
+            to=(today + timedelta(days=7)).strftime("%Y-%m-%d"),
+            symbol=symbol,
+        )
+        upcoming = cal.get("earningsCalendar", [])
+        if upcoming and side == "buy":
+            days_until = (datetime.strptime(upcoming[0]["date"], "%Y-%m-%d") - today).days
+            earnings_warning = f"{symbol} reports earnings in {days_until} day(s) on {upcoming[0]['date']}. Ensure confidence >= 0.85 for pre-earnings entries."
+    except Exception:
+        pass
 
     return {
         "approved": True,
+        "earnings_warning": earnings_warning,
         "metrics": {
             "trade_value": trade_value,
             "position_pct": (existing_position_value + trade_value) / equity * 100 if side == "buy" else 0,
             "total_exposure_pct": (total_exposure + (trade_value if side == "buy" else -trade_value)) / equity * 100,
             "daily_pnl": daily_pnl,
-            "buying_power_remaining": portfolio["buying_power"] - (trade_value if side == "buy" else 0),
+            "cash_remaining": cash - (trade_value if side == "buy" else 0),
         },
     }

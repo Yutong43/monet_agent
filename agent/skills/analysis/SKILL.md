@@ -2,9 +2,16 @@
 
 You are conducting the **analysis phase** of your autonomous trading loop.
 
+## Step 0: Load Context (ALWAYS DO THIS FIRST)
+
+Before anything else, load your full memory and recent history:
+1. Run `read_all_agent_memory()` to load all persistent beliefs at once
+2. Read your last 3 journal entries: `query_database("SELECT entry_type, title, content, symbols, created_at FROM agent_journal ORDER BY created_at DESC LIMIT 3")`
+3. This tells you what research was just done and which candidates to analyze
+
 ## Stage-Aware Behavior
 
-Read `agent_stage` from memory using `read_agent_memory("agent_stage")`. Your analysis approach varies by stage:
+Your analysis approach varies by stage (from `agent_stage` in memory):
 
 | Stage | Candidates | Price Target Style | Focus |
 |-------|-----------|-------------------|-------|
@@ -13,7 +20,7 @@ Read `agent_stage` from memory using `read_agent_memory("agent_stage")`. Your an
 | **Exploit** | 1-2 near targets | Tight targets (confident in valuation) | Precision entries, position management |
 
 ## Objective
-Perform deep technical and fundamental analysis on candidate stocks from your research, and set actionable price targets on the watchlist.
+Perform deep technical and fundamental analysis on candidate stocks from your research, and set actionable price targets on the watchlist. **Fundamentals drive the thesis; technicals refine the entry.**
 
 ## Workflow
 
@@ -21,21 +28,22 @@ Perform deep technical and fundamental analysis on candidate stocks from your re
 - Review your most recent research journal entry
 - Identify candidates worth deep analysis (count depends on stage — see table above)
 - Prioritize watchlist items near entry targets
-- **Check for imminent earnings** — if a stock reports within 5 days, flag it and consider risk
+- **Prioritize post-earnings reactions**: If any `earnings_reaction_{SYMBOL}` memories exist from research, analyze those stocks first
+- **Check for imminent earnings** — if a stock reports within 5 days, flag it and factor in the uncertainty
 
-### 2. Technical analysis (for each candidate)
-- Run `technical_analysis` to get RSI, MACD, Bollinger Bands, SMAs, volume
-- Look for convergence of bullish/bearish signals
-- Identify support and resistance levels
-- Check if price is at a key technical level
-
-### 3. Fundamental analysis (for each candidate)
+### 2. Fundamental analysis FIRST (for each candidate)
 - Run `fundamental_analysis` to get P/E, revenue, earnings, debt
 - Compare valuations to sector averages
 - Check analyst targets and recommendations
-- Assess growth trajectory
+- Assess growth trajectory — is revenue accelerating or decelerating?
+- **Key fundamental questions**:
+  - Is revenue growth sustainable or was it a one-time event?
+  - Are margins expanding or compressing? Why?
+  - Is the company generating free cash flow?
+  - Is the balance sheet strong enough to weather a downturn?
+  - How does forward P/E compare to growth rate (PEG ratio)?
 
-### 4. Competitive analysis (for each candidate)
+### 3. Competitive analysis (for each candidate)
 - Check if `company_profile_{SYMBOL}` exists in memory — if not, run `company_profile` first
 - Run `peer_comparison(symbol)` to see how the stock ranks vs competitors
 - Key questions:
@@ -45,6 +53,13 @@ Perform deep technical and fundamental analysis on candidate stocks from your re
   - Where does it rank on ROE and debt levels?
 - A stock trading at a premium to peers needs superior growth or margins to justify it
 - A stock at a discount to peers is only a value opportunity if the business is stable
+
+### 4. Technical analysis (for each candidate)
+- Run `technical_analysis` to get RSI, MACD, Bollinger Bands, SMAs, volume
+- Look for convergence of bullish/bearish signals
+- Identify support and resistance levels
+- Check if price is at a key technical level
+- **Technicals are for timing, not thesis** — a stock with great fundamentals at a bad technical entry is a "wait", not a "skip"
 
 ### 5. Set Price Targets (CRITICAL — do this for every analyzed stock)
 After completing analysis, compute and set `target_entry` and `target_exit` on the watchlist:
@@ -69,9 +84,10 @@ manage_watchlist(action="add", symbol="AAPL", thesis="...", target_entry=185.0, 
 
 ### 6. Synthesize thesis
 - For each candidate, form a clear bull case and bear case
+- **Ground the thesis in fundamentals**: revenue trajectory, margin outlook, competitive position
 - Assign a confidence score (0.0-1.0)
-- Determine entry price, target exit, and stop loss
-- Factor in earnings timing — avoid entering right before earnings unless thesis is event-driven
+- Determine entry price, target exit, and risk tolerance
+- Factor in earnings timing — stocks reporting within 5 days require confidence >= 0.85
 
 ### 7. Record analysis
 - Write a journal entry of type "analysis" for each candidate analyzed
@@ -79,7 +95,7 @@ manage_watchlist(action="add", symbol="AAPL", thesis="...", target_entry=185.0, 
 - Store rationale in memory (e.g. `watchlist_rationale_AAPL`)
 
 ## Confidence Scoring Guide
-- **0.8-1.0**: Strong conviction — multiple technical and fundamental signals align, peer comparison favorable
-- **0.6-0.8**: Moderate conviction — good setup but some uncertainty, average vs peers
-- **0.4-0.6**: Low conviction — mixed signals, worth watching
-- **Below 0.4**: Skip — not enough edge
+- **0.8-1.0**: Strong conviction — fundamentals excellent, peer comparison favorable, technicals supportive
+- **0.6-0.8**: Moderate conviction — good fundamentals but some uncertainty, decent vs peers
+- **0.4-0.6**: Low conviction — mixed fundamentals or unclear competitive position, worth watching
+- **Below 0.4**: Skip — not enough fundamental edge

@@ -39,14 +39,14 @@ your own trading decisions based on research, analysis, and risk management.
 - Manage existing positions (cut losers, trim winners) BEFORE adding new ones
 
 ## Current Task
-You are running an autonomous trading loop. Execute all 4 phases in order:
+You will receive instructions specifying which phases to run. Execute ONLY the requested phases, \
+in the order given. Read each skill file COMPLETELY before proceeding with that phase.
 
-1. **Research** — Read /skills/research/SKILL.md and execute the research phase completely
-2. **Analysis** — Read /skills/analysis/SKILL.md and analyze candidates from your research
-3. **Trade Execution** — Read /skills/trade-execution/SKILL.md and execute trades for candidates that pass analysis and risk checks. If no candidates meet your criteria, skip trading and note why in your journal
-4. **Reflection** — Read /skills/reflection/SKILL.md and reflect on this loop's activity and your overall performance
-
-Read each skill file COMPLETELY before proceeding with that phase.
+Available phases:
+- **Research** — /skills/research/SKILL.md
+- **Analysis** — /skills/analysis/SKILL.md
+- **Trade Execution** — /skills/trade-execution/SKILL.md
+- **Reflection** — /skills/reflection/SKILL.md
 """
 
 model_name = os.environ.get("MODEL_NAME", "anthropic:claude-sonnet-4-5-20250929")

@@ -1,5 +1,8 @@
 "use client";
 
+import { useState, useRef, useEffect } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface JournalEntry {
@@ -19,6 +22,8 @@ const typeColors: Record<string, string> = {
   market_scan: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
 };
 
+const COLLAPSED_HEIGHT = 200;
+
 export function JournalEntryCard({ entry }: { entry: JournalEntry }) {
   const colorClass = typeColors[entry.entry_type] ?? typeColors.market_scan;
   const date = new Date(entry.created_at).toLocaleDateString("en-US", {
@@ -27,6 +32,16 @@ export function JournalEntryCard({ entry }: { entry: JournalEntry }) {
     hour: "2-digit",
     minute: "2-digit",
   });
+
+  const [expanded, setExpanded] = useState(false);
+  const [needsTruncation, setNeedsTruncation] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (contentRef.current) {
+      setNeedsTruncation(contentRef.current.scrollHeight > COLLAPSED_HEIGHT);
+    }
+  }, [entry.content]);
 
   return (
     <Card>
@@ -51,9 +66,28 @@ export function JournalEntryCard({ entry }: { entry: JournalEntry }) {
         )}
       </CardHeader>
       <CardContent>
-        <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap">
-          {entry.content}
+        <div
+          ref={contentRef}
+          className="relative overflow-hidden"
+          style={{ maxHeight: expanded || !needsTruncation ? "none" : COLLAPSED_HEIGHT }}
+        >
+          <div className="journal-prose max-w-none">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {entry.content}
+            </ReactMarkdown>
+          </div>
+          {needsTruncation && !expanded && (
+            <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-card to-transparent" />
+          )}
         </div>
+        {needsTruncation && (
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="mt-2 text-sm font-medium text-primary hover:underline"
+          >
+            {expanded ? "Show less" : "Read more"}
+          </button>
+        )}
       </CardContent>
     </Card>
   );

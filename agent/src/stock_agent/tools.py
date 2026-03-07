@@ -422,6 +422,7 @@ AUTONOMOUS_TOOLS = [
     manage_watchlist,
     get_portfolio_state,
     check_trade_risk,
+    query_database,
 ]
 
 CHAT_TOOLS = [

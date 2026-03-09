@@ -937,6 +937,147 @@ def place_order(
     }
 
 
+def cancel_order(
+    trade_id: str,
+    reason: str | None = None,
+) -> dict:
+    """Cancel an open/accepted order on Alpaca and update the trade record.
+
+    Use this to clean up orders that were placed prematurely, no longer align
+    with your thesis, or that you regret after reflection.
+
+    Args:
+        trade_id: The trade UUID from the trades table (NOT the broker_order_id).
+        reason: Why you're cancelling — logged for accountability.
+
+    Returns:
+        Dict with cancellation status.
+    """
+    # Look up the trade to get broker_order_id
+    sb = get_supabase()
+    result = sb.table("trades").select("*").eq("id", trade_id).maybe_single().execute()
+    if not result.data:
+        return {"error": f"Trade {trade_id} not found"}
+
+    trade = result.data
+    broker_order_id = trade.get("broker_order_id")
+    if not broker_order_id:
+        return {"error": "No broker_order_id — trade may not have been submitted to Alpaca"}
+
+    # Check if already terminal
+    status = (trade.get("status") or "").lower()
+    if "filled" in status or "cancelled" in status or "canceled" in status:
+        return {"error": f"Order already in terminal state: {trade.get('status')}"}
+
+    # Cancel on Alpaca
+    client = get_trading_client()
+    try:
+        client.cancel_order_by_id(broker_order_id)
+    except Exception as e:
+        error_msg = str(e)
+        # If Alpaca says it's already done, update our record
+        if "already" in error_msg.lower() or "not found" in error_msg.lower():
+            update_trade(trade_id, {"status": "cancelled", "thesis": f"{trade.get('thesis', '')} | CANCELLED: {reason or 'no reason'}"})
+            return {"status": "already_terminal", "message": error_msg}
+        return {"error": f"Failed to cancel on Alpaca: {error_msg}"}
+
+    # Update our trade record
+    updated_thesis = trade.get("thesis", "") or ""
+    if reason:
+        updated_thesis = f"{updated_thesis} | CANCELLED: {reason}"
+
+    update_trade(trade_id, {
+        "status": "cancelled",
+        "thesis": updated_thesis.strip(),
+    })
+
+    # Write a journal entry to track the cancellation for accountability
+    cancel_summary = (
+        f"**Cancelled order**: {trade.get('side', '').upper()} "
+        f"{trade.get('quantity')} {trade.get('symbol')}\n\n"
+        f"**Original thesis**: {trade.get('thesis', 'N/A')}\n\n"
+        f"**Reason for cancellation**: {reason or 'No reason given'}\n\n"
+        f"**Order was placed**: {trade.get('created_at', 'unknown')}\n"
+        f"**Confidence at placement**: {trade.get('confidence', 'N/A')}"
+    )
+    try:
+        db_write_journal(
+            entry_type="trade",
+            title=f"Cancelled {trade.get('side', '').upper()} {trade.get('symbol')} — {reason or 'order cleanup'}",
+            content=cancel_summary,
+            symbols=[trade.get("symbol")] if trade.get("symbol") else None,
+        )
+    except Exception:
+        logger.warning("Failed to write cancellation journal entry for %s", trade_id)
+
+    return {
+        "status": "cancelled",
+        "trade_id": trade_id,
+        "symbol": trade.get("symbol"),
+        "side": trade.get("side"),
+        "quantity": str(trade.get("quantity")),
+        "reason": reason,
+    }
+
+
+def get_open_orders() -> dict:
+    """Get all open/accepted orders that haven't been filled or cancelled.
+
+    Use this at the start of execution phase to review pending orders
+    and decide whether to keep or cancel them.
+
+    Returns:
+        List of open trades with their details.
+    """
+    sb = get_supabase()
+    result = (
+        sb.table("trades")
+        .select("*")
+        .not_.is_("broker_order_id", "null")
+        .or_("status.ilike.%accepted%,status.ilike.%new%,status.ilike.%pending%,status.ilike.%partially_filled%")
+        .order("created_at", desc=True)
+        .execute()
+    )
+
+    open_trades = result.data or []
+
+    # Also check current status on Alpaca for each
+    client = get_trading_client()
+    enriched = []
+    for trade in open_trades:
+        broker_id = trade.get("broker_order_id")
+        alpaca_status = None
+        if broker_id:
+            try:
+                order = client.get_order_by_id(broker_id)
+                alpaca_status = str(order.status)
+                # Sync status if it changed
+                if alpaca_status != trade.get("status"):
+                    update_trade(trade["id"], {"status": alpaca_status})
+                    trade["status"] = alpaca_status
+            except Exception:
+                alpaca_status = "unknown (API error)"
+
+        enriched.append({
+            "trade_id": trade["id"],
+            "symbol": trade.get("symbol"),
+            "side": trade.get("side"),
+            "quantity": str(trade.get("quantity")),
+            "order_type": trade.get("order_type"),
+            "limit_price": str(trade.get("limit_price")) if trade.get("limit_price") else None,
+            "status": trade.get("status"),
+            "alpaca_status": alpaca_status,
+            "thesis": trade.get("thesis"),
+            "confidence": str(trade.get("confidence")),
+            "created_at": trade.get("created_at"),
+        })
+
+    return {
+        "open_orders": enriched,
+        "count": len(enriched),
+    }
+
+
 def read_agent_memory(key: str) -> dict:
     """Read a specific memory entry by key.
 
@@ -1143,6 +1284,8 @@ AUTONOMOUS_TOOLS = [
     earnings_calendar,
     market_breadth,
     place_order,
+    cancel_order,
+    get_open_orders,
     read_agent_memory,
     read_all_agent_memory,
     write_agent_memory,

@@ -33,12 +33,21 @@ Review recent performance, learn from outcomes, refine your strategy, and manage
 - Adjust `risk_appetite` if appropriate
 - **Update earnings reactions**: If any `earnings_reaction_{SYMBOL}` memories are stale (>7 days), clean them up
 
-### 4. Clean up watchlist
+### 4. Review & cancel stale orders
+- Run `get_open_orders()` to see any pending/accepted orders still sitting on Alpaca
+- For each open order, ask:
+  - **Do I still believe in this trade?** Has your thesis, analysis, or market view changed since you placed it?
+  - **Was this premature?** Did you place it before completing proper research or during a bad regime?
+  - **Has the setup expired?** Limit orders sitting unfilled for >1 day may mean the target was wrong
+- If an order no longer makes sense → cancel it with `cancel_order(trade_id, reason="...")` and document why
+- **Rule: Unfilled orders you no longer believe in are dead capital.** Don't let them linger — cancel and redeploy when the setup is right.
+
+### 5. Clean up watchlist
 - Remove symbols that no longer fit your thesis
 - Update target prices based on new analysis
 - Add new opportunities discovered during review
 
-### 5. Update Stage Counters (CRITICAL)
+### 6. Update Stage Counters (CRITICAL)
 Read `agent_stage` from memory and update its counters:
 
 1. **Count watchlist profiles**: Query memory for all keys matching `company_profile_*` pattern. Use `query_database` with:
@@ -71,7 +80,7 @@ Read `agent_stage` from memory and update its counters:
    ```
    If transitioning to a new stage, update `stage` and `started_at` to today's date.
 
-### 6. Write reflection
+### 7. Write reflection
 - Create a journal entry of type "reflection" covering:
   - Performance summary (wins/losses, total P&L)
   - Key lessons learned

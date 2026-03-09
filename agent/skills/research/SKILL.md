@@ -9,6 +9,15 @@ Before anything else, load your full memory and recent history:
 2. Read your last 3 journal entries: `query_database("SELECT entry_type, title, content, symbols, created_at FROM agent_journal ORDER BY created_at DESC LIMIT 3")`
 3. This tells you what you already know, what you did last run, and avoids repeating work
 
+## User Insights Check
+After loading context, query recent user insights (last 3 days):
+```sql
+SELECT title, content, symbols, created_at FROM agent_journal
+WHERE entry_type = 'user_insight' AND created_at >= NOW() - INTERVAL '3 days'
+ORDER BY created_at DESC
+```
+If any mention symbols on your watchlist or in your portfolio, factor them into your research priorities for this session. Do NOT let user insights override your stage-based workflow — they are advisory signals, not directives.
+
 ## Stage-Aware Behavior
 
 Your research depth depends on your current lifecycle stage (from `agent_stage` in memory):
@@ -33,7 +42,7 @@ Build deep, structured market intelligence using quantitative tools. No guessing
 ### 2. Portfolio & Earnings Check (every loop, every stage)
 - Run `get_portfolio_state` to see current positions and their P&L
 - **Position health**: For every held position, check if the fundamental thesis is still intact. If a stock just reported earnings, this is critical — read the latest news.
-- Run `earnings_calendar()` with no arguments (auto-checks watchlist + positions)
+- **ALWAYS run `earnings_calendar()` with no arguments** (auto-checks watchlist + positions). This refreshes the `upcoming_earnings` memory which powers the web calendar. Do this EVERY run — the data goes stale quickly.
 - **Flag any earnings within 7 days** — these need immediate attention
 - **Post-earnings reaction**: If any held stock or watchlist stock reported earnings in the last 3 days, immediately research the results:
   - Use `internet_search("[SYMBOL] earnings results Q[X] [year]")` to get actual numbers

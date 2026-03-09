@@ -101,7 +101,11 @@ function buildBio(memories: Record<string, any>, watchlist: WatchlistRow[]): str
       p4 += `I'm currently watching ${watchSymbols.join(", ")}. `;
     }
     if (Array.isArray(priList) && priList.length > 0) {
-      p4 += `My priorities this week: ${priList.slice(0, 3).join("; ")}.`;
+      p4 += `My priorities this week: ${priList.slice(0, 3).map((p: unknown) => {
+        if (typeof p === "string") return p;
+        if (p && typeof p === "object" && "focus" in p) return (p as { focus: string }).focus;
+        return String(p);
+      }).join("; ")}.`;
     } else if (watchlist.length > 0) {
       const nearest = watchlist.find((w) => w.target_entry);
       if (nearest) {

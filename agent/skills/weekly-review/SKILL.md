@@ -75,7 +75,18 @@ Read `agent_stage` from memory and perform a thorough assessment:
 
 6. **Write updated `agent_stage`** to memory with all current counters.
 
-### 6. Set Weekly Priorities
+### 6. User Insights Review
+Check how many user insights were submitted this week:
+```sql
+SELECT title, content, symbols, created_at FROM agent_journal
+WHERE entry_type = 'user_insight' AND created_at >= NOW() - INTERVAL '7 days'
+ORDER BY created_at DESC
+```
+- How many insights were submitted?
+- Did any lead to belief changes, thesis updates, or research you wouldn't have done otherwise?
+- Note this in your weekly review journal entry — it helps calibrate how useful the chat channel is as an input source.
+
+### 7. Set Weekly Priorities
 Based on your review, set 3-5 specific priorities for the coming week:
 - Which stocks to watch most closely (near targets)?
 - Which companies need fresh analysis?
@@ -95,7 +106,7 @@ Write these priorities to memory as `weekly_priorities`:
 }
 ```
 
-### 7. Write Weekly Review Journal
+### 8. Write Weekly Review Journal
 Create a comprehensive journal entry of type "reflection" covering:
 - Weekly performance summary
 - Trade win/loss analysis

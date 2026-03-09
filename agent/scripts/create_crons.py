@@ -38,7 +38,8 @@ CRONS = [
             "This is a scouting run — gather intelligence on market health, "
             "check earnings calendar, react to any post-earnings fundamental changes. "
             "Adjust depth based on your current agent_stage (explore/balanced/exploit). "
-            "Do NOT execute trades or analysis."
+            "Do NOT execute trades or analysis.\n\n"
+            "When writing journal entries, set run_source='morning_research'."
         ),
     },
     {
@@ -53,7 +54,8 @@ CRONS = [
             "Focus on deep fundamental analysis (1-2 stocks based on stage). "
             "Ground your thesis in revenue trends, margins, competitive position. "
             "Set or update price targets on the watchlist for every stock you analyze. "
-            "Do NOT execute trades."
+            "Do NOT execute trades.\n\n"
+            "When writing journal entries, set run_source='midday_analysis'."
         ),
     },
     {
@@ -74,7 +76,8 @@ CRONS = [
             "   - Update stage counters (cycles_completed, watchlist_profiles, total_trades)\n"
             "   - Check stage transition thresholds\n\n"
             "Remember: doing nothing is the default. Only trade if price targets are hit "
-            "and you have conviction grounded in strong fundamentals."
+            "and you have conviction grounded in strong fundamentals.\n\n"
+            "When writing journal entries, set run_source='eod_execution'."
         ),
     },
     {
@@ -91,7 +94,8 @@ CRONS = [
             "   - Build sector-level thesis in memory\n"
             "2. **Analysis** — Read /skills/analysis/SKILL.md\n"
             "   - Set/update price targets for all newly profiled stocks\n\n"
-            "Take your time — markets are closed. Depth over speed."
+            "Take your time — markets are closed. Depth over speed.\n\n"
+            "When writing journal entries, set run_source='weekend_research'."
         ),
     },
     {
@@ -106,7 +110,8 @@ CRONS = [
             "   - Stage management: update counters, check transition thresholds\n"
             "   - Set 3-5 specific priorities for the coming week\n"
             "   - Write comprehensive weekly reflection journal entry\n\n"
-            "This is your most important session of the week. Be thorough and honest."
+            "This is your most important session of the week. Be thorough and honest.\n\n"
+            "When writing journal entries, set run_source='weekly_review'."
         ),
     },
 ]

@@ -1000,10 +1000,16 @@ def cancel_order(
         f"**Order was placed**: {trade.get('created_at', 'unknown')}\n"
         f"**Confidence at placement**: {trade.get('confidence', 'N/A')}"
     )
+    cancel_title = f"Cancelled {trade.get('side', '').upper()} {trade.get('symbol')}"
+    if reason:
+        # Truncate reason in title to keep it readable
+        short_reason = reason[:60] + "..." if len(reason) > 60 else reason
+        cancel_title = f"{cancel_title} — {short_reason}"
+
     try:
         db_write_journal(
             entry_type="trade",
-            title=f"Cancelled {trade.get('side', '').upper()} {trade.get('symbol')} — {reason or 'order cleanup'}",
+            title=cancel_title,
             content=cancel_summary,
             symbols=[trade.get("symbol")] if trade.get("symbol") else None,
         )
@@ -1131,19 +1137,25 @@ def write_journal_entry(
     title: str,
     content: str,
     symbols: list[str] | None = None,
+    run_source: str | None = None,
 ) -> dict:
     """Write a journal entry recording the agent's activity or thoughts.
 
     Args:
         entry_type: Category of the entry.
-        title: Brief title.
+        title: Brief title (keep under 80 characters).
         content: Full markdown content.
         symbols: Related ticker symbols.
+        run_source: What triggered this run — e.g. "morning_research", "midday_analysis",
+            "eod_execution", "weekend_research", "weekly_review", or "ad_hoc".
 
     Returns:
         The created journal entry.
     """
-    result = db_write_journal(entry_type, title, content, symbols=symbols)
+    metadata = {}
+    if run_source:
+        metadata["run_source"] = run_source
+    result = db_write_journal(entry_type, title, content, symbols=symbols, metadata=metadata or None)
     return {"journal_id": result["id"], "status": "created"}
 
 
@@ -1296,6 +1308,35 @@ AUTONOMOUS_TOOLS = [
     query_database,
 ]
 
+def submit_user_insight(
+    title: str,
+    content: str,
+    symbols: list[str] | None = None,
+) -> dict:
+    """Flag a substantive user observation for your autonomous self to consider.
+
+    Use this when a user raises something genuinely interesting — a thesis
+    challenge, a position concern, a sector rotation observation, or contrarian
+    analysis. Do NOT use for casual questions or generic market chat.
+
+    Args:
+        title: Short summary of the insight (e.g. "Thesis challenge on NVDA margins").
+        content: The full observation with reasoning.
+        symbols: Optional list of related ticker symbols.
+
+    Returns:
+        Confirmation dict with the journal entry ID.
+    """
+    result = db_write_journal(
+        entry_type="user_insight",
+        title=title,
+        content=content,
+        symbols=symbols,
+        metadata={"source": "chat"},
+    )
+    return {"status": "submitted", "journal_id": result.get("id")}
+
+
 CHAT_TOOLS = [
     internet_search,
     get_stock_quote,
@@ -1305,4 +1346,5 @@ CHAT_TOOLS = [
     sector_analysis,
     peer_comparison,
     market_breadth,
+    submit_user_insight,
 ]

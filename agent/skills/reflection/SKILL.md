@@ -14,26 +14,45 @@ Review recent performance, learn from outcomes, refine your strategy, and manage
 
 ## Workflow
 
-### 1. Review recent trades
+### 1. Review User Insights
+- Query user insights from the last 7 days:
+  ```sql
+  SELECT title, content, symbols, created_at FROM agent_journal
+  WHERE entry_type = 'user_insight' AND created_at >= NOW() - INTERVAL '7 days'
+  ORDER BY created_at DESC
+  ```
+- For each insight, ask:
+  - Does this challenge any of my current theses?
+  - Does it raise a risk I missed?
+  - Does it suggest an opportunity worth investigating?
+- If useful → incorporate into your reflection and update relevant memory (e.g. `market_outlook`, `watchlist_rationale_{SYMBOL}`)
+- If not useful → skip silently. These are advisory signals, not commands.
+
+### 2. Review recent trades
 - Load recent trades and check their current status/P&L
 - Compare actual outcomes to your original thesis
 - Identify which trades worked and which didn't
 - **For losing positions**: Was the loss due to fundamental deterioration or market noise? This determines whether to hold/DCA or cut.
 
-### 2. Analyze performance patterns
+### 3. Analyze performance patterns
 - Are your high-confidence trades outperforming low-confidence ones?
 - Which sectors or strategies are working?
 - Are you properly sizing positions?
 - Are your fundamental assessments proving accurate after earnings?
 - **Track thesis accuracy**: When you predicted "revenue will grow 15%" and it grew 10%, note the miss and calibrate
 
-### 3. Update beliefs
+### 4. Update beliefs
 - Revise your `market_outlook` memory based on what you've observed
 - Update your `strategy` memory if patterns suggest changes
-- Adjust `risk_appetite` if appropriate
+- **ALWAYS reassess and write `risk_appetite`** — this must reflect current conditions. Consider:
+  - Current VIX level (>25 = reduce risk, <20 = normal risk)
+  - Market breadth (% above 50-day SMA)
+  - Recent P&L and drawdown
+  - Sector rotation signal (risk-on vs risk-off)
+  - Even if your risk appetite hasn't changed, write it to confirm it's still current
 - **Update earnings reactions**: If any `earnings_reaction_{SYMBOL}` memories are stale (>7 days), clean them up
 
-### 4. Review & cancel stale orders
+### 5. Review & cancel stale orders
 - Run `get_open_orders()` to see any pending/accepted orders still sitting on Alpaca
 - For each open order, ask:
   - **Do I still believe in this trade?** Has your thesis, analysis, or market view changed since you placed it?
@@ -42,12 +61,12 @@ Review recent performance, learn from outcomes, refine your strategy, and manage
 - If an order no longer makes sense → cancel it with `cancel_order(trade_id, reason="...")` and document why
 - **Rule: Unfilled orders you no longer believe in are dead capital.** Don't let them linger — cancel and redeploy when the setup is right.
 
-### 5. Clean up watchlist
+### 6. Clean up watchlist
 - Remove symbols that no longer fit your thesis
 - Update target prices based on new analysis
 - Add new opportunities discovered during review
 
-### 6. Update Stage Counters (CRITICAL)
+### 7. Update Stage Counters (CRITICAL)
 Read `agent_stage` from memory and update its counters:
 
 1. **Count watchlist profiles**: Query memory for all keys matching `company_profile_*` pattern. Use `query_database` with:
@@ -80,7 +99,7 @@ Read `agent_stage` from memory and update its counters:
    ```
    If transitioning to a new stage, update `stage` and `started_at` to today's date.
 
-### 7. Write reflection
+### 8. Write reflection
 - Create a journal entry of type "reflection" covering:
   - Performance summary (wins/losses, total P&L)
   - Key lessons learned

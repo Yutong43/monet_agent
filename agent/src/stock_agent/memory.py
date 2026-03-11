@@ -119,6 +119,23 @@ def _load_agent_context_inner() -> str:
         if items:
             sections.append("## Recent Decisions\n" + "\n".join(items))
 
+    # --- Performance vs Benchmark ---
+    try:
+        from stock_agent.db import get_equity_snapshots
+        snapshots = get_equity_snapshots(days=7)
+        if snapshots:
+            latest = snapshots[0]  # newest first
+            port_ret = latest.get("portfolio_cumulative_return", 0)
+            spy_ret = latest.get("spy_cumulative_return", 0)
+            alpha = latest.get("alpha", 0)
+            sections.append(
+                f"## Performance vs Benchmark\n"
+                f"Portfolio: {port_ret:+.2f}% | SPY: {spy_ret:+.2f}% | Alpha: {alpha:+.2f}% "
+                f"(as of {latest.get('snapshot_date', '?')})"
+            )
+    except Exception:
+        pass  # No snapshots yet, skip
+
     # --- Recent journal entries ---
     recent = read_journal(limit=5)
     if recent:

@@ -9,8 +9,8 @@ import time
 
 import pandas as pd
 import yfinance as yf
-from alpaca.trading.requests import MarketOrderRequest, LimitOrderRequest
-from alpaca.trading.enums import OrderSide, TimeInForce
+from alpaca.trading.requests import MarketOrderRequest, LimitOrderRequest, TakeProfitRequest, StopLossRequest
+from alpaca.trading.enums import OrderSide, TimeInForce, OrderClass
 from tavily import TavilyClient
 
 from langgraph_sdk import get_sync_client
@@ -28,6 +28,9 @@ from stock_agent.db import (
     write_journal as db_write_journal,
     write_memory as db_write_memory,
     read_all_memory,
+    record_equity_snapshot as db_record_equity_snapshot,
+    get_equity_snapshots,
+    get_risk_settings,
 )
 from stock_agent.finnhub_client import get_finnhub
 from stock_agent.market_data import (
@@ -841,11 +844,20 @@ def place_order(
     limit_price: float | None = None,
     thesis: str | None = None,
     confidence: float | None = None,
+    take_profit_price: float | None = None,
+    stop_loss_price: float | None = None,
 ) -> dict:
-    """Place a trade order via Alpaca paper trading.
+    """Place a trade order via Alpaca paper trading, optionally as a bracket order.
 
     IMPORTANT: Always run check_trade_risk first. This tool should only be called
     from the autonomous loop, never from chat mode.
+
+    Bracket orders: If take_profit_price and/or stop_loss_price are provided,
+    the order is submitted as a bracket order with automatic take-profit and
+    stop-loss legs. Both legs use GTC (good-til-canceled) time-in-force.
+
+    For buy orders, if stop_loss_price is not provided, a default 5% stop-loss
+    is auto-calculated from the entry price.
 
     Args:
         symbol: Stock ticker symbol.
@@ -855,6 +867,8 @@ def place_order(
         limit_price: Required if order_type is "limit".
         thesis: The reasoning behind this trade.
         confidence: Confidence score 0.0-1.0.
+        take_profit_price: Target exit price for take-profit leg.
+        stop_loss_price: Stop price for stop-loss leg.
 
     Returns:
         Dict with order details and trade record.
@@ -864,29 +878,45 @@ def place_order(
     if not risk["approved"]:
         return {"error": f"Risk check failed: {risk['reason']}", "risk": risk}
 
-    # Place order with Alpaca
-    client = get_trading_client()
-    order_side = OrderSide.BUY if side == "buy" else OrderSide.SELL
+    # Determine if bracket order
+    is_bracket = take_profit_price is not None or stop_loss_price is not None
+
+    # Auto-derive stop-loss for buys if not provided but take-profit is
+    if is_bracket and side == "buy" and stop_loss_price is None:
+        risk_settings = get_risk_settings()
+        stop_pct = risk_settings.get("default_stop_loss_pct", 5.0) / 100
+        ref_price = limit_price if limit_price else get_quote(symbol).get("last_price", 0)
+        stop_loss_price = round(ref_price * (1 - stop_pct), 2)
+
+    # Build order kwargs
+    order_kwargs = {
+        "symbol": symbol,
+        "qty": quantity,
+        "side": OrderSide.BUY if side == "buy" else OrderSide.SELL,
+    }
+
+    if is_bracket:
+        order_kwargs["order_class"] = OrderClass.BRACKET
+        order_kwargs["time_in_force"] = TimeInForce.GTC
+        if take_profit_price is not None:
+            order_kwargs["take_profit"] = TakeProfitRequest(limit_price=take_profit_price)
+        if stop_loss_price is not None:
+            order_kwargs["stop_loss"] = StopLossRequest(stop_price=stop_loss_price)
+    else:
+        order_kwargs["time_in_force"] = TimeInForce.DAY
 
     if order_type == "limit" and limit_price is not None:
-        request = LimitOrderRequest(
-            symbol=symbol,
-            qty=quantity,
-            side=order_side,
-            time_in_force=TimeInForce.DAY,
-            limit_price=limit_price,
-        )
+        order_kwargs["limit_price"] = limit_price
+        request = LimitOrderRequest(**order_kwargs)
     else:
-        request = MarketOrderRequest(
-            symbol=symbol,
-            qty=quantity,
-            side=order_side,
-            time_in_force=TimeInForce.DAY,
-        )
+        request = MarketOrderRequest(**order_kwargs)
 
+    # Place order with Alpaca
+    client = get_trading_client()
     order = client.submit_order(request)
 
     # Record in database
+    order_class_str = "bracket" if is_bracket else "simple"
     trade = create_trade(
         symbol=symbol,
         side=side,
@@ -895,6 +925,9 @@ def place_order(
         limit_price=limit_price,
         thesis=thesis,
         confidence=confidence,
+        take_profit_price=take_profit_price,
+        stop_loss_price=stop_loss_price,
+        order_class=order_class_str,
     )
 
     # Update with broker order ID
@@ -932,9 +965,12 @@ def place_order(
         "side": side,
         "quantity": quantity,
         "order_type": order_type,
+        "order_class": order_class_str,
         "status": final_status,
         "filled_avg_price": filled_avg_price,
         "filled_quantity": filled_qty,
+        "take_profit_price": take_profit_price,
+        "stop_loss_price": stop_loss_price,
         "risk_metrics": risk.get("metrics", {}),
     }
 
@@ -1491,6 +1527,340 @@ def send_daily_recap() -> dict:
 
 
 # ============================================================
+# Bracket / Position Protection tools
+# ============================================================
+
+def attach_bracket_to_position(
+    symbol: str,
+    quantity: float,
+    stop_loss_price: float,
+    take_profit_price: float | None = None,
+) -> dict:
+    """Attach protective stop-loss and take-profit orders to an existing position.
+
+    Use this to protect positions that were opened without bracket orders,
+    or to update stops on positions that have appreciated (trailing stop).
+
+    Places an OCO (one-cancels-other) sell order: one leg is a stop at
+    stop_loss_price, the other is a limit at take_profit_price.
+    If only stop_loss_price is provided, places a simple stop order.
+
+    Args:
+        symbol: Stock ticker with an existing long position.
+        quantity: Number of shares to protect (usually full position size).
+        stop_loss_price: Stop price — triggers a market sell if hit.
+        take_profit_price: Limit price for take-profit leg. If None, places stop-only.
+
+    Returns:
+        Dict with order details.
+    """
+    client = get_trading_client()
+
+    if take_profit_price is not None:
+        # OCO: stop-loss + take-profit
+        # Alpaca OCO requires a limit order with take_profit and stop_loss
+        request = LimitOrderRequest(
+            symbol=symbol,
+            qty=quantity,
+            side=OrderSide.SELL,
+            time_in_force=TimeInForce.GTC,
+            order_class=OrderClass.OCO,
+            limit_price=take_profit_price,
+            take_profit=TakeProfitRequest(limit_price=take_profit_price),
+            stop_loss=StopLossRequest(stop_price=stop_loss_price),
+        )
+    else:
+        # Simple stop order
+        from alpaca.trading.requests import StopOrderRequest
+        request = StopOrderRequest(
+            symbol=symbol,
+            qty=quantity,
+            side=OrderSide.SELL,
+            time_in_force=TimeInForce.GTC,
+            stop_price=stop_loss_price,
+        )
+
+    order = client.submit_order(request)
+
+    # Record in trades table
+    order_class_str = "oco" if take_profit_price else "stop"
+    trade = create_trade(
+        symbol=symbol,
+        side="sell",
+        quantity=quantity,
+        order_type="stop" if take_profit_price is None else "oco",
+        take_profit_price=take_profit_price,
+        stop_loss_price=stop_loss_price,
+        order_class=order_class_str,
+        thesis=f"Protective order: SL={stop_loss_price}" + (f", TP={take_profit_price}" if take_profit_price else ""),
+    )
+    update_trade(trade["id"], {
+        "broker_order_id": str(order.id),
+        "status": str(order.status),
+    })
+
+    return {
+        "trade_id": trade["id"],
+        "broker_order_id": str(order.id),
+        "symbol": symbol,
+        "order_class": order_class_str,
+        "stop_loss_price": stop_loss_price,
+        "take_profit_price": take_profit_price,
+        "status": str(order.status),
+    }
+
+
+# ============================================================
+# Performance Tracking tools
+# ============================================================
+
+def record_daily_snapshot() -> dict:
+    """Record today's portfolio equity and SPY close for benchmark tracking.
+
+    Call this during EOD reflection (4 PM ET) to log a daily data point.
+    Cumulative returns vs SPY are auto-computed from the first snapshot (inception).
+
+    Returns:
+        Dict with today's snapshot including portfolio return, SPY return, and alpha.
+    """
+    portfolio = get_portfolio()
+    equity = float(portfolio.get("equity", 0))
+    cash = float(portfolio.get("cash", 0))
+
+    spy_quote = get_quote("SPY")
+    # get_quote returns bid/ask, use midpoint as proxy for close
+    bid = float(spy_quote.get("bid_price", 0))
+    ask = float(spy_quote.get("ask_price", 0))
+    spy_close = round((bid + ask) / 2, 2) if bid and ask else float(spy_quote.get("last_price", 0))
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    snapshot = db_record_equity_snapshot(today, equity, cash, spy_close)
+
+    return {
+        "date": today,
+        "portfolio_equity": equity,
+        "spy_close": spy_close,
+        "portfolio_cumulative_return": snapshot.get("portfolio_cumulative_return"),
+        "spy_cumulative_return": snapshot.get("spy_cumulative_return"),
+        "alpha": snapshot.get("alpha"),
+    }
+
+
+def get_performance_comparison(days: int = 30) -> dict:
+    """Compare portfolio performance vs SPY over a given period.
+
+    Uses daily equity snapshots recorded by record_daily_snapshot().
+    Available in both autonomous and chat modes.
+
+    Args:
+        days: Number of days to look back (default 30).
+
+    Returns:
+        Dict with portfolio return, SPY return, alpha, max drawdown, and time series.
+    """
+    snapshots = get_equity_snapshots(days)
+    if not snapshots:
+        return {"error": "No equity snapshots yet. Snapshots are recorded during EOD reflection."}
+
+    # Snapshots come newest-first, reverse for chronological
+    snapshots = list(reversed(snapshots))
+
+    latest = snapshots[-1]
+    oldest = snapshots[0]
+
+    # Period return (not cumulative from inception — just this window)
+    oldest_equity = float(oldest["portfolio_equity"])
+    latest_equity = float(latest["portfolio_equity"])
+    oldest_spy = float(oldest["spy_close"])
+    latest_spy = float(latest["spy_close"])
+
+    period_portfolio_return = round((latest_equity / oldest_equity - 1) * 100, 2) if oldest_equity else 0
+    period_spy_return = round((latest_spy / oldest_spy - 1) * 100, 2) if oldest_spy else 0
+    period_alpha = round(period_portfolio_return - period_spy_return, 2)
+
+    # Max drawdown
+    peak = 0
+    max_dd = 0
+    for s in snapshots:
+        eq = float(s["portfolio_equity"])
+        peak = max(peak, eq)
+        dd = (peak - eq) / peak * 100 if peak > 0 else 0
+        max_dd = max(max_dd, dd)
+
+    # Time series for charting
+    series = [
+        {
+            "date": s["snapshot_date"],
+            "portfolio": float(s.get("portfolio_cumulative_return") or 0),
+            "spy": float(s.get("spy_cumulative_return") or 0),
+            "alpha": float(s.get("alpha") or 0),
+        }
+        for s in snapshots
+    ]
+
+    return {
+        "period_days": len(snapshots),
+        "portfolio_return_pct": period_portfolio_return,
+        "spy_return_pct": period_spy_return,
+        "alpha_pct": period_alpha,
+        "max_drawdown_pct": round(max_dd, 2),
+        "latest_equity": latest_equity,
+        "latest_date": latest["snapshot_date"],
+        "cumulative_portfolio_return": float(latest.get("portfolio_cumulative_return") or 0),
+        "cumulative_spy_return": float(latest.get("spy_cumulative_return") or 0),
+        "cumulative_alpha": float(latest.get("alpha") or 0),
+        "series": series,
+    }
+
+
+# ============================================================
+# Position Management tools
+# ============================================================
+
+def position_health_check(symbol: str) -> dict:
+    """Get a structured health report for a held position.
+
+    Returns P&L, days held, distance from stop/target, position weight,
+    whether protective orders exist, and DCA eligibility.
+
+    Args:
+        symbol: Stock ticker to check.
+
+    Returns:
+        Dict with position health metrics.
+    """
+    portfolio = get_portfolio()
+    positions = portfolio.get("positions", [])
+    pos = next((p for p in positions if p.get("symbol") == symbol.upper()), None)
+    if not pos:
+        return {"error": f"No open position in {symbol}"}
+
+    equity = float(portfolio.get("equity", 1))
+    current_price = float(pos.get("current_price", 0))
+    avg_entry = float(pos.get("avg_entry_price", 0))
+    qty = float(pos.get("qty", 0))
+    market_value = float(pos.get("market_value", 0))
+    unrealized_pnl = float(pos.get("unrealized_pl", 0))
+    pnl_pct = float(pos.get("unrealized_plpc", 0)) * 100 if pos.get("unrealized_plpc") else 0
+
+    position_weight = round(market_value / equity * 100, 2) if equity else 0
+
+    # Check stock analysis memory for targets
+    stock_mem = read_memory(f"stock:{symbol.upper()}")
+    target_entry = None
+    target_exit = None
+    confidence = None
+    if stock_mem and isinstance(stock_mem.get("value"), dict):
+        v = stock_mem["value"]
+        target_entry = v.get("target_entry")
+        target_exit = v.get("target_exit")
+        confidence = v.get("confidence")
+
+    # Distance from targets
+    dist_to_exit = round((float(target_exit) / current_price - 1) * 100, 2) if target_exit and current_price else None
+    dist_from_entry = round((current_price / avg_entry - 1) * 100, 2) if avg_entry else None
+
+    # Check for protective orders
+    sb = get_supabase()
+    protective = (
+        sb.table("trades")
+        .select("id, order_class, stop_loss_price, take_profit_price, status")
+        .eq("symbol", symbol.upper())
+        .eq("side", "sell")
+        .or_("status.ilike.%new%,status.ilike.%accepted%,status.ilike.%pending%")
+        .execute()
+    )
+    has_stop_loss = any(
+        t.get("stop_loss_price") for t in (protective.data or [])
+    )
+    has_take_profit = any(
+        t.get("take_profit_price") for t in (protective.data or [])
+    )
+
+    # DCA eligibility
+    risk_settings = get_risk_settings()
+    max_pos_pct = risk_settings.get("max_position_pct", 10.0)
+    dca_eligible = (
+        pnl_pct < -8
+        and position_weight < max_pos_pct
+        and confidence is not None
+        and confidence >= 0.6
+    )
+
+    return {
+        "symbol": symbol.upper(),
+        "quantity": qty,
+        "avg_entry_price": avg_entry,
+        "current_price": current_price,
+        "market_value": market_value,
+        "unrealized_pnl": unrealized_pnl,
+        "pnl_pct": round(pnl_pct, 2),
+        "position_weight_pct": position_weight,
+        "dist_from_entry_pct": dist_from_entry,
+        "target_exit": target_exit,
+        "dist_to_exit_pct": dist_to_exit,
+        "has_stop_loss": has_stop_loss,
+        "has_take_profit": has_take_profit,
+        "protected": has_stop_loss,
+        "dca_eligible": dca_eligible,
+        "confidence": confidence,
+    }
+
+
+# ============================================================
+# Price Alert tools
+# ============================================================
+
+def check_watchlist_alerts(threshold_pct: float = 2.0) -> dict:
+    """Check all watchlist stocks against their target_entry prices.
+
+    Returns stocks within threshold_pct of their target (or below it).
+    Use this for lightweight price checks between full trading loops.
+
+    Args:
+        threshold_pct: How close to target to trigger an alert (default 2%).
+
+    Returns:
+        Dict with alerts list and count.
+    """
+    watchlist = get_watchlist()
+    alerts = []
+
+    for item in watchlist:
+        target = item.get("target_entry")
+        if not target:
+            continue
+        target = float(target)
+        symbol = item["symbol"]
+
+        try:
+            quote = get_quote(symbol)
+            price = float(quote.get("last_price", 0))
+            if price <= 0:
+                continue
+
+            distance_pct = round((price / target - 1) * 100, 2)
+
+            if distance_pct <= threshold_pct:
+                alerts.append({
+                    "symbol": symbol,
+                    "current_price": price,
+                    "target_entry": target,
+                    "distance_pct": distance_pct,
+                    "at_or_below_target": distance_pct <= 0,
+                    "thesis": item.get("thesis", ""),
+                })
+        except Exception:
+            logger.warning("Failed to get quote for %s in alert check", symbol)
+
+    return {
+        "alerts": alerts,
+        "count": len(alerts),
+        "checked": len([w for w in watchlist if w.get("target_entry")]),
+    }
+
+
+# ============================================================
 # Tool collections for each mode
 # ============================================================
 
@@ -1509,6 +1879,7 @@ AUTONOMOUS_TOOLS = [
     place_order,
     cancel_order,
     get_open_orders,
+    attach_bracket_to_position,
     read_agent_memory,
     read_all_agent_memory,
     write_agent_memory,
@@ -1521,6 +1892,10 @@ AUTONOMOUS_TOOLS = [
     update_market_regime,
     update_stock_analysis,
     record_decision,
+    record_daily_snapshot,
+    get_performance_comparison,
+    position_health_check,
+    check_watchlist_alerts,
 ]
 
 def submit_user_insight(
@@ -1562,4 +1937,5 @@ CHAT_TOOLS = [
     peer_comparison,
     market_breadth,
     submit_user_insight,
+    get_performance_comparison,
 ]

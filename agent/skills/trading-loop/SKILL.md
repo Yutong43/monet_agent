@@ -159,15 +159,40 @@ Match order aggressiveness to how much you want the position:
 4. `check_trade_risk()` → if fail, STOP
 5. No earnings within 5 days (unless confidence >= 0.85)
 6. Check `get_open_orders()` — don't place duplicates
-7. Place order and record via `record_decision()`
+7. **Use bracket orders**: Always provide `take_profit_price` (from target_exit) and `stop_loss_price` (default 5% below entry, or tighter if confident). This auto-protects every new position.
+8. Place order and record via `record_decision()`
 
 **Key principle**: The biggest risk for a long-term investor is not overpaying by 2% — it's missing a high-conviction position entirely because you waited for a perfect entry that never came. Optimize for *being in the trade*, not for the last dollar of entry price.
 
-### Existing positions to manage:
-- **Fundamental deterioration** (bad earnings flagged in Step 2): Consider selling
-- **Down but fundamentals intact**: Consider DCA if thesis unchanged
-- **Up 20%+ near target_exit**: Consider trimming
-- **Over 12% of portfolio**: Trim to target weight
+### Step 7b: Position Management (for each held position)
+
+Run `position_health_check(symbol)` for every held position. Then:
+
+**a. Bracket order hygiene (CRITICAL — do this first)**:
+- If `protected: false` → the position has no stop-loss. Fix immediately with `attach_bracket_to_position(symbol, quantity, stop_loss_price, take_profit_price)`.
+- Use target_exit from `stock:{SYMBOL}` memory as take_profit_price.
+- Use entry_price * 0.95 (5% stop) as default stop_loss_price, or tighter if position is profitable.
+
+**b. Trailing stop adjustment**:
+- If position is up 15%+ from entry (`dist_from_entry_pct >= 15`):
+  - Tighten stop-loss to breakeven (entry price) or higher
+  - Cancel existing protective order, place new one with tighter stop
+  - Rule: trailing stop = max(entry_price, current_price * 0.92) — never give back more than 8% from highs
+
+**c. DCA trigger**:
+- If `dca_eligible: true` (down 8%+, below max weight, confidence >= 0.6):
+  - Verify fundamentals are still intact (check `stock:{SYMBOL}` memory)
+  - Add 25-50% of original position size
+  - Use bracket order for the DCA add too
+
+**d. Rebalancing**:
+- If `position_weight_pct > 12`: Trim to 10% of portfolio
+- If `position_weight_pct < 3` and confidence still high: Consider adding
+
+**e. Exit signals**:
+- `pnl_pct` near `dist_to_exit_pct` → approaching target_exit, consider trimming 50%
+- Fundamental thesis broken (earnings miss + guidance cut) → sell entire position
+- Better opportunity available and this is weakest position → exit to redeploy
 
 **If no trades: document why.** Most loops = no trades. This is fine and expected.
 

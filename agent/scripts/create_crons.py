@@ -99,6 +99,18 @@ CRONS = [
             "When writing journal entries, set run_source='weekly_review'."
         ),
     },
+    {
+        "name": "Price Alert Check (every 15 min, market hours)",
+        "schedule": "*/15 14-20 * * 1-5",
+        "message": (
+            "Run the price alert check. Execute this phase:\n\n"
+            "1. **Price Check** — Read /skills/price-check/SKILL.md\n\n"
+            "This is a LIGHTWEIGHT check. Only check watchlist prices against targets.\n"
+            "Do NOT do research, analysis, or screening.\n"
+            "If a stock is near target, execute the decision gate for that symbol only.\n"
+            "If no alerts, exit immediately with minimal output."
+        ),
+    },
 ]
 
 
@@ -137,7 +149,7 @@ async def main():
         print(f"  Next run: {cron.get('next_run_date')}")
         print()
 
-    print(f"Done! {len(CRONS)} cron jobs configured (17 runs/week).")
+    print(f"Done! {len(CRONS)} cron jobs configured.")
 
 
 asyncio.run(main())

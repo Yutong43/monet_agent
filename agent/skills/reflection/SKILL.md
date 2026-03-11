@@ -29,25 +29,34 @@ ORDER BY created_at DESC
 - If useful, incorporate into reflection and update relevant memory
 - If not useful, skip silently
 
-### 2. Observation Window — Today's P&L
+### 2. Record Daily Snapshot (CRITICAL — do this every weekday)
+Call `record_daily_snapshot()` to log today's portfolio equity and SPY close. This builds the performance-vs-benchmark history used in weekly reviews and chat. Do NOT skip this.
+
+### 3. Observation Window — Today's P&L
 - Run `get_portfolio_state` to see current positions and P&L
 - For any trades placed earlier today (from journal/decisions), check current status
 - Compare the decision reasoning to what actually happened
 - Note: intraday P&L on same-day trades is noisy — focus on whether the setup was sound
 
-### 3. Review Today's Decisions
+### 3b. Position Protection Check
+For each held position, run `position_health_check(symbol)`:
+- If `protected: false` → attach a stop-loss immediately via `attach_bracket_to_position()`
+- If position is up 15%+ → tighten stop to breakeven or higher (trailing stop)
+- If position approaching target_exit → consider trimming 50%
+
+### 4. Review Today's Decisions
 - Load today's `decision:*` memory entries
 - For each decision (BUY, LIMIT_ORDER, WAIT, SELL):
   - Was the reasoning solid in hindsight?
   - Did you miss any information that was available?
   - Would you make the same decision again?
 
-### 4. Confidence Calibration
+### 5. Confidence Calibration
 - Are high-confidence decisions outperforming low-confidence ones?
 - Track thesis accuracy: when you predicted growth of X%, what actually happened?
 - Identify systematic biases (always too bullish? too conservative?)
 
-### 5. Update Beliefs
+### 6. Update Beliefs
 - Revise `market_outlook` if today's data warrants it
 - **ALWAYS reassess and write `risk_appetite`** — consider:
   - Current VIX level (>25 = reduce risk, <20 = normal)
@@ -56,18 +65,18 @@ ORDER BY created_at DESC
   - Sector rotation signal
 - Clean up stale `earnings_reaction_{SYMBOL}` memories (>7 days old)
 
-### 6. Review & Cancel Stale Orders
+### 7. Review & Cancel Stale Orders
 - Run `get_open_orders()` to see pending orders
 - For each: do you still believe in it? Has regime changed? Was it premature?
 - Cancel orders that no longer make sense
 - **Rule: Unfilled orders you no longer believe in are dead capital.**
 
-### 7. Clean Up Watchlist
+### 8. Clean Up Watchlist
 - Remove symbols that no longer fit your thesis
 - Update targets based on new analysis
 - Prune weak candidates
 
-### 8. Update Stage Counters
+### 9. Update Stage Counters
 Read `agent_stage` from memory and update:
 1. Count `stock:*` memory keys for `watchlist_profiles`:
    ```sql
@@ -83,7 +92,7 @@ Read `agent_stage` from memory and update:
    - **Balanced → Exploit**: `total_trades >= 10` AND `watchlist_profiles >= 25`
 5. Write updated `agent_stage` to memory
 
-### 9. Write Reflection
+### 10. Write Reflection
 Create a journal entry of type "reflection" covering:
 - Performance summary (wins/losses, total P&L)
 - Key lessons from today's decisions
@@ -92,7 +101,7 @@ Create a journal entry of type "reflection" covering:
 - Current stage and progress toward next transition
 - Set `run_source='eod_reflection'`
 
-### 10. Send Daily Recap (LAST STEP — weekdays only)
+### 11. Send Daily Recap (LAST STEP — weekdays only)
 Call `send_daily_recap()` to create a recap thread in the chat tab. This gives the user a summary without digging through journal entries. Do NOT skip this step.
 
 ## Reflection Principles

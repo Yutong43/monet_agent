@@ -105,6 +105,10 @@ def create_trade(
     thesis: str | None = None,
     confidence: float | None = None,
     journal_id: str | None = None,
+    take_profit_price: float | None = None,
+    stop_loss_price: float | None = None,
+    order_class: str = "simple",
+    parent_order_id: str | None = None,
 ) -> dict:
     """Record a trade."""
     sb = get_supabase()
@@ -116,9 +120,16 @@ def create_trade(
         "thesis": thesis,
         "confidence": confidence,
         "journal_id": journal_id,
+        "order_class": order_class,
     }
     if limit_price is not None:
         row["limit_price"] = limit_price
+    if take_profit_price is not None:
+        row["take_profit_price"] = take_profit_price
+    if stop_loss_price is not None:
+        row["stop_loss_price"] = stop_loss_price
+    if parent_order_id is not None:
+        row["parent_order_id"] = parent_order_id
     result = sb.table("trades").insert(row).execute()
     return result.data[0]
 
@@ -173,6 +184,71 @@ def remove_from_watchlist(symbol: str) -> bool:
     sb = get_supabase()
     result = sb.table("watchlist").delete().eq("symbol", symbol).execute()
     return len(result.data) > 0
+
+
+# --- Equity Snapshots ---
+
+def record_equity_snapshot(
+    snapshot_date: str,
+    portfolio_equity: float,
+    portfolio_cash: float,
+    spy_close: float,
+) -> dict:
+    """Record a daily equity snapshot for benchmark tracking."""
+    sb = get_supabase()
+
+    # Get inception snapshot to compute cumulative returns
+    first = (
+        sb.table("equity_snapshots")
+        .select("portfolio_equity, spy_close")
+        .order("snapshot_date")
+        .limit(1)
+        .execute()
+    )
+
+    if first.data:
+        inception_equity = float(first.data[0]["portfolio_equity"]) or 1
+        inception_spy = float(first.data[0]["spy_close"]) or 1
+        portfolio_return = round((portfolio_equity / inception_equity - 1) * 100, 4)
+        spy_return = round((spy_close / inception_spy - 1) * 100, 4)
+        alpha = round(portfolio_return - spy_return, 4)
+    else:
+        # This IS the first snapshot
+        portfolio_return = 0.0
+        spy_return = 0.0
+        alpha = 0.0
+
+    result = (
+        sb.table("equity_snapshots")
+        .upsert({
+            "snapshot_date": snapshot_date,
+            "portfolio_equity": portfolio_equity,
+            "portfolio_cash": portfolio_cash,
+            "spy_close": spy_close,
+            "portfolio_cumulative_return": portfolio_return,
+            "spy_cumulative_return": spy_return,
+            "alpha": alpha,
+        }, on_conflict="snapshot_date")
+        .execute()
+    )
+    return result.data[0]
+
+
+def get_equity_snapshots(days: int = 30) -> list[dict]:
+    """Get recent equity snapshots."""
+    try:
+        sb = get_supabase()
+        result = (
+            sb.table("equity_snapshots")
+            .select("*")
+            .order("snapshot_date", desc=True)
+            .limit(days)
+            .execute()
+        )
+        return result.data if result else []
+    except Exception:
+        logger.warning("Failed to read equity snapshots")
+        return []
 
 
 # --- Risk Settings ---

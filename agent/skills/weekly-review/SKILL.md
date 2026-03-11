@@ -16,6 +16,8 @@ Full portfolio and strategy review. Calibrate confidence, assess what's working,
 
 ### 1. Portfolio Performance Review
 - Run `get_portfolio_state` to get current holdings
+- Run `get_performance_comparison(days=7)` for precise week-over-week portfolio vs SPY comparison
+- Run `get_performance_comparison(days=30)` for monthly context and max drawdown
 - Query recent trades from the past week:
   ```sql
   SELECT symbol, side, quantity, confidence, status, thesis, created_at
@@ -23,8 +25,7 @@ Full portfolio and strategy review. Calibrate confidence, assess what's working,
   WHERE created_at >= NOW() - INTERVAL '7 days'
   ORDER BY created_at DESC
   ```
-- Calculate week-over-week performance if possible
-- Compare against SPY weekly return (get quote for SPY)
+- Note alpha (portfolio return minus SPY return) — this is the number that matters
 
 ### 2. Trade Analysis
 - For each trade this week:
@@ -55,9 +56,9 @@ Full portfolio and strategy review. Calibrate confidence, assess what's working,
 ### 5. Stage Management (CRITICAL)
 Read `agent_stage` from memory and perform a thorough assessment:
 
-1. **Count watchlist profiles**:
+1. **Count watchlist profiles** (structured stock:* keys):
    ```sql
-   SELECT COUNT(*) as count FROM agent_memory WHERE key LIKE 'company_profile_%'
+   SELECT COUNT(*) as count FROM agent_memory WHERE key LIKE 'stock:%'
    ```
 
 2. **Count completed trades**:

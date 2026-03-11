@@ -65,6 +65,7 @@ Available phases:
 - **Trading Loop** — /skills/trading-loop/SKILL.md (unified research → analysis → decision in one run)
 - **Reflection** — /skills/reflection/SKILL.md (standalone EOD review, no research or trading)
 - **Weekly Review** — /skills/weekly-review/SKILL.md (Sunday full review + stage management)
+- **Price Check** — /skills/price-check/SKILL.md (lightweight alert check, runs frequently)
 """
 
 model_name = os.environ.get("MODEL_NAME", "anthropic:claude-sonnet-4-5-20250929")

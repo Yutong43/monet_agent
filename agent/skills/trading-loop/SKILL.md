@@ -140,18 +140,28 @@ Do NOT chase — revised target should still be below current price.
 
 For each stock on the watchlist with price targets:
 
-### Stocks within 3% above target_entry (close but not hit):
-- If confidence meets stage threshold AND fundamentals solid AND no earnings within 5 days:
-  - `check_trade_risk()` → if pass, place **limit order** at `target_entry`
-- Record via `record_decision(symbol, "LIMIT_ORDER", reasoning, confidence, current_price)`
+### Order Type by Conviction Level
 
-### Stocks at or below target_entry:
-- If confidence meets stage threshold:
-  - `check_trade_risk()` → if pass, place **market order**
-- Record via `record_decision(symbol, "BUY", reasoning, confidence, current_price)`
+Match order aggressiveness to how much you want the position:
 
-### Stocks not near target:
-- Record via `record_decision(symbol, "WAIT", reasoning, confidence, current_price)`
+| Confidence | Distance from Target | Order Type | Rationale |
+|-----------|---------------------|------------|-----------|
+| **0.85+** (high conviction) | Within 5% above target | **Market order** or limit within 0.5% of current price | You want this stock. Get the fill. Missing the trade is worse than paying 2-3% more. |
+| **0.70-0.85** (medium conviction) | Within 3% above target | **Limit order** 1-2% below current price | Willing to buy, but want a small pullback. Okay to miss. |
+| **0.60-0.70** (low conviction) | At or below target | **Limit order** at target_entry | Only buy if it comes to you. If it doesn't fill, you didn't want it badly. |
+| **Below threshold** | Any | **No order** | WAIT and document why. |
+
+### Applying the rules:
+
+1. Check confidence against stage threshold (explore: 0.80, balanced/exploit: 0.60)
+2. If below threshold → WAIT, record decision, move on
+3. If above threshold → determine order type from table above
+4. `check_trade_risk()` → if fail, STOP
+5. No earnings within 5 days (unless confidence >= 0.85)
+6. Check `get_open_orders()` — don't place duplicates
+7. Place order and record via `record_decision()`
+
+**Key principle**: The biggest risk for a long-term investor is not overpaying by 2% — it's missing a high-conviction position entirely because you waited for a perfect entry that never came. Optimize for *being in the trade*, not for the last dollar of entry price.
 
 ### Existing positions to manage:
 - **Fundamental deterioration** (bad earnings flagged in Step 2): Consider selling

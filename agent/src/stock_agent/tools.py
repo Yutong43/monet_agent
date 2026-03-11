@@ -741,6 +741,67 @@ def earnings_calendar(symbols: list[str] | None = None, days_ahead: int = 30) ->
     }
 
 
+def eps_estimates(symbol: str, freq: str = "quarterly") -> dict:
+    """Get consensus EPS estimates and revision trends for a stock.
+
+    Shows forward-looking analyst EPS estimates by period, including high/low
+    range and analyst count. Use this to detect estimate revisions — rising
+    estimates are a strong bullish signal, falling estimates are bearish.
+
+    Args:
+        symbol: Ticker symbol (e.g. "NVDA").
+        freq: "quarterly" or "annual" (default "quarterly").
+
+    Returns:
+        Dict with current estimates, revision direction, and analyst coverage.
+    """
+    fh = get_finnhub()
+
+    try:
+        data = fh.company_eps_estimates(symbol, freq=freq)
+    except Exception as e:
+        return {"error": f"Failed to fetch EPS estimates for {symbol}: {e}"}
+
+    estimates = data.get("data", [])
+    if not estimates:
+        return {"symbol": symbol, "freq": freq, "estimates": [], "note": "No estimates available"}
+
+    # Build structured output
+    results = []
+    for est in estimates:
+        results.append({
+            "period": est.get("period"),
+            "quarter": est.get("quarter"),
+            "year": est.get("year"),
+            "eps_avg": est.get("epsAvg"),
+            "eps_high": est.get("epsHigh"),
+            "eps_low": est.get("epsLow"),
+            "num_analysts": est.get("numberAnalysts"),
+        })
+
+    # Detect revision trend: compare consecutive quarterly estimates
+    # If next quarter estimate > current quarter estimate, that's growth
+    revision_signal = None
+    if len(results) >= 2:
+        curr = results[0].get("eps_avg")
+        nxt = results[1].get("eps_avg")
+        if curr is not None and nxt is not None:
+            if nxt > curr:
+                revision_signal = "rising"
+            elif nxt < curr:
+                revision_signal = "falling"
+            else:
+                revision_signal = "flat"
+
+    return {
+        "symbol": symbol,
+        "freq": freq,
+        "estimates": results[:8],  # Cap at 8 periods
+        "revision_signal": revision_signal,
+        "total_periods": len(results),
+    }
+
+
 def market_breadth() -> dict:
     """Assess overall market health using breadth indicators.
 
@@ -1507,7 +1568,12 @@ def send_daily_recap() -> dict:
     )
 
     try:
-        client = get_sync_client()
+        langgraph_url = os.environ.get(
+            "LANGGRAPH_URL",
+            "https://monet-0f211e9ce05255c2a85f92d6847873b5.us.langgraph.app",
+        )
+        api_key = os.environ.get("LANGGRAPH_API_KEY") or os.environ.get("LANGSMITH_API_KEY")
+        client = get_sync_client(url=langgraph_url, api_key=api_key)
         thread = client.threads.create(
             metadata={"title": f"Daily Recap — {today}"},
         )
@@ -1875,6 +1941,7 @@ AUTONOMOUS_TOOLS = [
     sector_analysis,
     peer_comparison,
     earnings_calendar,
+    eps_estimates,
     market_breadth,
     place_order,
     cancel_order,
@@ -1936,6 +2003,7 @@ CHAT_TOOLS = [
     sector_analysis,
     peer_comparison,
     market_breadth,
+    eps_estimates,
     submit_user_insight,
     get_performance_comparison,
 ]

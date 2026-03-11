@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { PerformanceCard, LifecycleCard } from "@/components/trading/performance-card";
+import { BenchmarkCard } from "@/components/trading/benchmark-card";
 import { PortfolioSummary, PositionsTable } from "@/components/trading/portfolio-card";
 import { TradeCard } from "@/components/trading/trade-card";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 
 export default function DashboardPage() {
   const [portfolio, setPortfolio] = useState<any>(null);
@@ -16,11 +18,15 @@ export default function DashboardPage() {
     async function load() {
       const supabase = createClient();
 
-      const [tradesRes, watchlistRes] = await Promise.all([
+      const [portfolioRes, tradesRes, watchlistRes] = await Promise.all([
+        fetch("/api/portfolio").then((r) => r.ok ? r.json() : null).catch(() => null),
         supabase.from("trades").select("*").order("created_at", { ascending: false }).limit(10),
         supabase.from("watchlist").select("*").order("added_at", { ascending: false }),
       ]);
 
+      if (portfolioRes) {
+        setPortfolio(portfolioRes);
+      }
       setTrades(tradesRes.data ?? []);
       setWatchlist(watchlistRes.data ?? []);
       setLoading(false);
@@ -40,23 +46,23 @@ export default function DashboardPage() {
     <div className="h-full overflow-y-auto p-6 space-y-6">
       <h1 className="text-2xl font-semibold">Dashboard</h1>
 
+      {/* Row 1: Overview Cards */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <PerformanceCard />
+        <LifecycleCard />
+        <BenchmarkCard />
+      </div>
+
+      {/* Row 2: Portfolio Summary */}
       {portfolio && (
         <>
-          <PortfolioSummary data={portfolio} />
+          <PortfolioSummary data={portfolio.account} />
           <PositionsTable positions={portfolio.positions} />
         </>
       )}
 
+      {/* Row 3: Watchlist + Recent Trades */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold">Recent Trades</h2>
-          {trades.length === 0 ? (
-            <Card><CardContent className="p-4 text-center text-muted-foreground">No trades yet</CardContent></Card>
-          ) : (
-            trades.map((t) => <TradeCard key={t.id} trade={t} />)
-          )}
-        </div>
-
         <div className="space-y-4">
           <h2 className="text-lg font-semibold">Watchlist</h2>
           {watchlist.length === 0 ? (
@@ -84,6 +90,15 @@ export default function DashboardPage() {
                 </table>
               </CardContent>
             </Card>
+          )}
+        </div>
+
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold">Recent Trades</h2>
+          {trades.length === 0 ? (
+            <Card><CardContent className="p-4 text-center text-muted-foreground">No trades yet</CardContent></Card>
+          ) : (
+            trades.map((t) => <TradeCard key={t.id} trade={t} />)
           )}
         </div>
       </div>

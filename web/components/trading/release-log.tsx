@@ -1,0 +1,99 @@
+"use client";
+
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+interface ReleaseEntry {
+  version: string;
+  date: string;
+  title: string;
+  items: string[];
+}
+
+const RELEASES: ReleaseEntry[] = [
+  {
+    version: "v0.5",
+    date: "Mar 11",
+    title: "Dashboard Redesign & EPS Estimates",
+    items: [
+      "Dashboard restructure: performance, lifecycle, benchmark cards up top",
+      "Live portfolio data via Alpaca API route (server-side)",
+      "Positions table with P&L on dashboard",
+      "Finnhub EPS estimate/revision tool for fundamental analysis",
+      "Release log on About Me page",
+    ],
+  },
+  {
+    version: "v0.4",
+    date: "Mar 11",
+    title: "Bracket Orders & Monitoring",
+    items: [
+      "Bracket orders with stop-loss and take-profit",
+      "Benchmark tracking via equity_snapshots",
+      "Position management and protection status",
+      "Price alerts with 15-minute checks",
+    ],
+  },
+  {
+    version: "v0.3",
+    date: "Mar 11",
+    title: "Unified Trading Loop",
+    items: [
+      "Single-pass trading loop (research → analyze → decide)",
+      "Structured memory layer (market_regime, stock:*, decision:*)",
+      "Conviction-based order logic",
+      "Chat prioritizes journal/memory over search",
+    ],
+  },
+  {
+    version: "v0.2",
+    date: "Mar 10",
+    title: "Limit Orders & UI",
+    items: [
+      "Limit order support",
+      "Daily recap in reflection",
+      "About Me cards (performance, lifecycle)",
+      "Tool call UI in chat",
+    ],
+  },
+  {
+    version: "v0.1",
+    date: "Mar 9",
+    title: "Initial Release",
+    items: [
+      "Autonomous trading agent with cron schedule",
+      "Research, analysis, and execution phases",
+      "Alpaca paper trading integration",
+      "Web dashboard and chat interface",
+    ],
+  },
+];
+
+export function ReleaseLog() {
+  return (
+    <Card className="h-fit">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+          Release Log
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-5 max-h-[600px] overflow-y-auto">
+        {RELEASES.map((release) => (
+          <div key={release.version}>
+            <div className="flex items-baseline gap-2 mb-1">
+              <span className="text-sm font-semibold">{release.version}</span>
+              <span className="text-xs text-muted-foreground">{release.date}</span>
+            </div>
+            <p className="text-sm font-medium mb-1">{release.title}</p>
+            <ul className="space-y-0.5">
+              {release.items.map((item, i) => (
+                <li key={i} className="text-xs text-muted-foreground leading-relaxed">
+                  • {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}

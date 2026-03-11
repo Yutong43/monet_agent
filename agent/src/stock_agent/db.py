@@ -194,7 +194,11 @@ def record_equity_snapshot(
     portfolio_cash: float,
     spy_close: float,
 ) -> dict:
-    """Record a daily equity snapshot for benchmark tracking."""
+    """Record a daily equity snapshot for benchmark tracking.
+
+    Alpha is only meaningful when >50% of portfolio is deployed.
+    When mostly cash, alpha is stored as None to avoid misleading numbers.
+    """
     sb = get_supabase()
 
     # Get inception snapshot to compute cumulative returns
@@ -206,17 +210,22 @@ def record_equity_snapshot(
         .execute()
     )
 
+    deployed_pct = round(
+        (portfolio_equity - portfolio_cash) / portfolio_equity * 100, 1
+    ) if portfolio_equity > 0 else 0.0
+
     if first.data:
         inception_equity = float(first.data[0]["portfolio_equity"]) or 1
         inception_spy = float(first.data[0]["spy_close"]) or 1
         portfolio_return = round((portfolio_equity / inception_equity - 1) * 100, 4)
         spy_return = round((spy_close / inception_spy - 1) * 100, 4)
-        alpha = round(portfolio_return - spy_return, 4)
+        # Alpha is only meaningful when >50% deployed
+        alpha = round(portfolio_return - spy_return, 4) if deployed_pct > 50 else None
     else:
         # This IS the first snapshot
         portfolio_return = 0.0
         spy_return = 0.0
-        alpha = 0.0
+        alpha = None
 
     result = (
         sb.table("equity_snapshots")
@@ -228,6 +237,7 @@ def record_equity_snapshot(
             "portfolio_cumulative_return": portfolio_return,
             "spy_cumulative_return": spy_return,
             "alpha": alpha,
+            "deployed_pct": deployed_pct,
         }, on_conflict="snapshot_date")
         .execute()
     )

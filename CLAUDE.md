@@ -178,6 +178,14 @@ cd agent && python scripts/create_crons.py
 cd agent && python scripts/migrate_memory.py
 ```
 
+## Release Log
+
+When you ship a meaningful change (new tool, UI restructure, new skill, behavior change), update the release log at `web/components/trading/release-log.tsx`:
+- Add a new entry at the top of the `RELEASES` array
+- Bump the version (v0.1, v0.2, etc.)
+- Use today's date and a short title
+- List 3-5 bullet points summarizing what changed
+
 ## Important Rules
 
 - Chat mode tools are READ-ONLY — never expose `place_order` in chat

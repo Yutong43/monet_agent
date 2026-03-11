@@ -94,16 +94,18 @@ When running on Saturday:
 
 For each candidate:
 1. Run `fundamental_analysis(symbol)` for P/E, revenue, earnings, debt, growth
-2. Run `technical_analysis(symbol)` for RSI, MACD, Bollinger Bands, SMAs, volume
-3. Run `peer_comparison(symbol)` if not already done in Step 4
-4. **Key fundamental questions**:
+2. Run `eps_estimates(symbol)` for consensus EPS estimates and revision trends
+3. Run `technical_analysis(symbol)` for RSI, MACD, Bollinger Bands, SMAs, volume
+4. Run `peer_comparison(symbol)` if not already done in Step 4
+5. **Key fundamental questions**:
    - Is revenue growth sustainable or one-time?
    - Are margins expanding or compressing? Why?
    - Is the company generating free cash flow?
    - How does forward P/E compare to growth rate (PEG)?
    - Is the valuation premium/discount vs peers justified?
-5. Form bull case and bear case
-6. Assign confidence score (0.0-1.0)
+   - **Are EPS estimates rising or falling?** Rising estimates = analysts getting more bullish = strong signal. Falling = red flag even if price looks cheap.
+6. Form bull case and bear case
+7. Assign confidence score (0.0-1.0)
 
 **Technicals are for timing, not thesis** — great fundamentals at a bad entry = "wait", not "skip."
 

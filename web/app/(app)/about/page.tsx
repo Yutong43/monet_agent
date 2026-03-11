@@ -1,7 +1,7 @@
 "use client";
 
 import { AboutMeSection } from "@/components/trading/about-me";
-import { PerformanceCard, LifecycleCard } from "@/components/trading/performance-card";
+import { ReleaseLog } from "@/components/trading/release-log";
 
 export default function AboutPage() {
   return (
@@ -9,9 +9,8 @@ export default function AboutPage() {
       <h1 className="text-2xl font-semibold">About Me</h1>
       <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
         <AboutMeSection />
-        <div className="lg:sticky lg:top-6 lg:self-start space-y-4">
-          <PerformanceCard />
-          <LifecycleCard />
+        <div className="lg:sticky lg:top-6 lg:self-start">
+          <ReleaseLog />
         </div>
       </div>
     </div>

@@ -1161,6 +1161,150 @@ def write_journal_entry(
     return {"journal_id": result["id"], "status": "created"}
 
 
+def update_market_regime(
+    vix: float,
+    breadth_pct: float,
+    rotation_signal: str,
+    regime_label: str,
+    confidence: float,
+) -> dict:
+    """Update the structured market regime memory.
+
+    Call this at the end of Step 1 (Market Health Check) in the trading loop
+    to persist a typed snapshot of current market conditions.
+
+    Args:
+        vix: Current VIX level.
+        breadth_pct: Percentage of stocks above 50-day SMA (from market_breadth).
+        rotation_signal: "risk-on", "risk-off", or "mixed".
+        regime_label: "healthy-bull", "broad-weakness", "transitional", or "risk-off".
+        confidence: Your confidence in this regime assessment (0.0–1.0).
+
+    Returns:
+        Confirmation of the write.
+    """
+    value = {
+        "vix": round(vix, 2),
+        "breadth_pct": round(breadth_pct, 1),
+        "rotation_signal": rotation_signal,
+        "regime_label": regime_label,
+        "confidence": round(confidence, 2),
+        "as_of": datetime.now().strftime("%Y-%m-%d %I:%M %p"),
+    }
+    result = db_write_memory("market_regime", value)
+    return {"key": "market_regime", "status": "saved", "value": value, "updated_at": result["updated_at"]}
+
+
+def update_stock_analysis(
+    symbol: str,
+    thesis: str,
+    target_entry: float,
+    target_exit: float,
+    confidence: float,
+    bull_case: str | None = None,
+    bear_case: str | None = None,
+    fundamentals_score: float | None = None,
+    status: str = "watching",
+) -> dict:
+    """Update structured analysis for a stock in memory and sync to watchlist.
+
+    Call this in Step 6 of the trading loop after completing fundamental + technical
+    analysis. This replaces the old pattern of separate manage_watchlist() +
+    write_agent_memory(watchlist_rationale_*) calls.
+
+    Args:
+        symbol: Stock ticker (e.g. "AAPL").
+        thesis: Core investment thesis (1-2 sentences).
+        target_entry: Price to buy at.
+        target_exit: Price to take profit at.
+        confidence: Conviction level (0.0–1.0).
+        bull_case: Best-case scenario description.
+        bear_case: Worst-case scenario description.
+        fundamentals_score: Optional 0-10 fundamentals quality score.
+        status: "watching", "buying", "holding", "exited".
+
+    Returns:
+        Confirmation with the stored analysis.
+    """
+    # Read current market regime to tag when targets were set
+    regime_mem = read_memory("market_regime")
+    regime_when_set = None
+    if regime_mem and isinstance(regime_mem.get("value"), dict):
+        regime_when_set = regime_mem["value"].get("regime_label")
+
+    now = datetime.now().strftime("%Y-%m-%d %I:%M %p")
+    value = {
+        "symbol": symbol.upper(),
+        "thesis": thesis,
+        "target_entry": round(target_entry, 2),
+        "target_exit": round(target_exit, 2),
+        "confidence": round(confidence, 2),
+        "status": status,
+        "target_set_date": datetime.now().strftime("%Y-%m-%d"),
+        "regime_when_set": regime_when_set,
+        "last_analyzed": now,
+    }
+    if bull_case:
+        value["bull_case"] = bull_case
+    if bear_case:
+        value["bear_case"] = bear_case
+    if fundamentals_score is not None:
+        value["fundamentals_score"] = round(fundamentals_score, 1)
+
+    key = f"stock:{symbol.upper()}"
+    result = db_write_memory(key, value)
+
+    # Sync targets to watchlist table
+    add_to_watchlist(
+        symbol=symbol.upper(),
+        thesis=thesis,
+        target_entry=target_entry,
+        target_exit=target_exit,
+    )
+
+    return {"key": key, "status": "saved", "value": value, "updated_at": result["updated_at"]}
+
+
+def record_decision(
+    symbol: str,
+    action: str,
+    reasoning: str,
+    confidence: float,
+    price: float,
+) -> dict:
+    """Record a trading decision (including WAITs) to structured memory.
+
+    Call this in Step 7 of the trading loop for EVERY stock evaluated —
+    not just trades, but also WAIT decisions. This creates an audit trail
+    that reflection and weekly review can analyze.
+
+    Args:
+        symbol: Stock ticker.
+        action: "BUY", "SELL", "LIMIT_ORDER", "WAIT", "DCA", "TRIM".
+        reasoning: Why you made this decision (2-3 sentences).
+        confidence: Confidence at time of decision (0.0–1.0).
+        price: Current price at time of decision.
+
+    Returns:
+        Confirmation with the stored decision.
+    """
+    now = datetime.now()
+    date_str = now.strftime("%Y-%m-%d")
+    key = f"decision:{symbol.upper()}:{date_str}"
+
+    value = {
+        "symbol": symbol.upper(),
+        "action": action.upper(),
+        "reasoning": reasoning,
+        "confidence": round(confidence, 2),
+        "price_at_decision": round(price, 2),
+        "executed": action.upper() in ("BUY", "SELL", "DCA", "TRIM", "LIMIT_ORDER"),
+        "decided_at": now.strftime("%Y-%m-%d %I:%M %p"),
+    }
+    result = db_write_memory(key, value)
+    return {"key": key, "status": "saved", "value": value, "updated_at": result["updated_at"]}
+
+
 def manage_watchlist(
     action: Literal["add", "remove", "list"],
     symbol: str | None = None,
@@ -1374,6 +1518,9 @@ AUTONOMOUS_TOOLS = [
     check_trade_risk,
     query_database,
     send_daily_recap,
+    update_market_regime,
+    update_stock_analysis,
+    record_decision,
 ]
 
 def submit_user_insight(

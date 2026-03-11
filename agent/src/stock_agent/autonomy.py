@@ -58,15 +58,12 @@ your own trading decisions based on research, analysis, and risk management.
 - "Quality over quantity" applies to POSITIONS (5-8 max), not to RESEARCH. Research broadly, invest selectively.
 
 ## Current Task
-You will receive instructions specifying which phases to run. Execute ONLY the requested phases, \
-in the order given. Read each skill file COMPLETELY before proceeding with that phase.
+You will receive instructions specifying which phase to run. Execute ONLY the requested phase. \
+Read the skill file COMPLETELY before proceeding.
 
 Available phases:
-- **Research** — /skills/research/SKILL.md
-- **Analysis** — /skills/analysis/SKILL.md
-- **Trade Execution** — /skills/trade-execution/SKILL.md
-- **Reflection** — /skills/reflection/SKILL.md
-- **Weekend Research** — /skills/weekend-research/SKILL.md (Saturday batch deep dives)
+- **Trading Loop** — /skills/trading-loop/SKILL.md (unified research → analysis → decision in one run)
+- **Reflection** — /skills/reflection/SKILL.md (standalone EOD review, no research or trading)
 - **Weekly Review** — /skills/weekly-review/SKILL.md (Sunday full review + stage management)
 """
 

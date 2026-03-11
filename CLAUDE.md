@@ -1,9 +1,25 @@
 # Monet Agent — Autonomous AI Investor
 
 ## Project Overview
-An autonomous AI stock trading agent that makes its own trading decisions on a cron schedule (research -> analyze -> trade -> reflect). Uses Alpaca paper trading, has persistent memory in Supabase, and a Next.js web UI for monitoring/chat.
+An autonomous AI stock trading agent that makes its own trading decisions on a cron schedule (unified trading loop → reflection). Uses Alpaca paper trading, has persistent structured memory in Supabase, and a Next.js web UI for monitoring/chat.
 
-**Goal**: Beat the S&P 500 consistently with disciplined risk management. Not chasing home runs — systematic alpha through momentum + mean reversion on US large/mid-caps.
+**Goal**: Beat the S&P 500 consistently with disciplined risk management. Not chasing home runs — systematic alpha through quality growth investing focused on AI infrastructure.
+
+## Your Role
+
+You are not just writing code. You are a **thinking partner** in building a better autonomous investor. This means:
+
+- **Actively identify gaps** in Monet's decision-making, risk management, and data quality
+- **Suggest better practices** — if Monet's behavior is suboptimal (too conservative, too aggressive, missing signals), propose fixes to skills, tools, or strategy memory
+- **Recommend tools/APIs** — if a paid data source, screening tool, or analytics API would meaningfully improve Monet's edge, flag it with cost/benefit reasoning
+- **Challenge assumptions** — if the cron schedule, position sizing, confidence formula, or any rule seems wrong, say so
+- **Think like a portfolio manager** — understand the difference between entry optimization and opportunity cost, when to be disciplined vs when discipline becomes an excuse for inaction
+
+When reviewing Monet's journal entries, trades, or decisions, look for:
+- Systematic biases (always too bullish? always waiting?)
+- Tools that return bad/stale data
+- Skills that produce verbose reasoning but weak decisions
+- Missing capabilities that would give Monet an edge
 
 ## Architecture
 
@@ -17,7 +33,7 @@ stock_agent/
 │   │   ├── tools.py                # AUTONOMOUS_TOOLS + CHAT_TOOLS definitions
 │   │   ├── db.py                   # Supabase CRUD (memory, journal, trades, watchlist, risk)
 │   │   ├── supabase_client.py      # Supabase singleton client
-│   │   ├── memory.py               # load_agent_context() for chat system prompt
+│   │   ├── memory.py               # load_agent_context() — structured memory for system prompt
 │   │   ├── auth.py                 # Supabase JWT validation via langgraph_sdk.Auth
 │   │   ├── middleware.py           # handle_tool_errors + ToolRetryMiddleware
 │   │   ├── alpaca_client.py        # Alpaca paper trading client
@@ -25,17 +41,19 @@ stock_agent/
 │   │   ├── technical.py            # RSI, MACD, Bollinger, SMA, ATR indicators
 │   │   └── risk.py                 # Pre-trade risk checks
 │   ├── skills/                     # Deep Agent skill definitions
-│   │   ├── research/SKILL.md       # Stage-aware market research
-│   │   ├── analysis/SKILL.md       # Analysis + price target setting
-│   │   ├── trade-execution/SKILL.md # Price-target-driven execution
-│   │   ├── reflection/SKILL.md     # Daily reflection + stage counter updates
-│   │   ├── weekend-research/SKILL.md # Saturday batch deep dives
+│   │   ├── trading-loop/SKILL.md   # Unified loop: research → analyze → decide (Steps 0-8)
+│   │   ├── reflection/SKILL.md     # Standalone EOD reflection + daily recap
 │   │   ├── weekly-review/SKILL.md  # Sunday full review + stage management
-│   │   └── database-guide/SKILL.md
+│   │   ├── database-guide/SKILL.md # Schema reference for query_database
+│   │   ├── research/SKILL.md       # (legacy — replaced by trading-loop)
+│   │   ├── analysis/SKILL.md       # (legacy — replaced by trading-loop)
+│   │   ├── trade-execution/SKILL.md # (legacy — replaced by trading-loop)
+│   │   └── weekend-research/SKILL.md # (legacy — replaced by trading-loop weekend mode)
 │   └── scripts/
 │       ├── seed_strategy.py        # One-time seed for founding strategy
 │       ├── seed_stage.py           # Seed agent_stage to "explore"
-│       └── create_crons.py         # Create/update LangGraph cron jobs
+│       ├── create_crons.py         # Create/update LangGraph cron jobs
+│       └── migrate_memory.py       # One-time migration to structured memory
 ├── web/                            # Next.js frontend
 │   └── app/
 │       ├── (app)/dashboard/        # Portfolio, trades, watchlist
@@ -53,32 +71,57 @@ Both graphs are registered in `langgraph.json` and run in a single LangGraph Pla
 | Graph | File | Purpose | Tools |
 |-------|------|---------|-------|
 | `monet_agent` | `agent.py:graph` | Chat mode — users ask questions | Read-only: search, quotes, portfolio, outlook, journal, trades |
-| `autonomous_loop` | `autonomy.py:autonomous_graph` | Trading loop — runs on cron | Full: above + place_order, write_memory, write_journal, watchlist, risk check, technicals, fundamentals, screening |
+| `autonomous_loop` | `autonomy.py:autonomous_graph` | Trading loop — runs on cron | Full: above + place_order, write_memory, write_journal, watchlist, risk check, technicals, fundamentals, screening, structured memory tools |
 
 ## Scheduling (17 runs/week)
 
-The autonomous loop runs via **LangGraph Platform crons** with an explore/exploit lifecycle:
+The autonomous loop runs via **LangGraph Platform crons**:
 
 ### Weekdays (Mon-Fri) — 3 runs/day
-| Cron (UTC) | Toronto | Phases | Focus |
-|------------|---------|--------|-------|
-| `0 14 * * 1-5` | 10am | Research | Market health, earnings, news scan |
-| `0 17 * * 1-5` | 1pm | Research + Analysis | Deep company dive, set price targets |
-| `0 20 * * 1-5` | 4pm | Execution + Reflection | Check targets, trade if hit, daily reflection |
+| Cron (UTC) | Toronto | Skill | Focus |
+|------------|---------|-------|-------|
+| `0 14 * * 1-5` | 10am | Trading Loop | Full pass: research → analyze → decide |
+| `0 17 * * 1-5` | 1pm | Trading Loop | Full pass (builds on morning's work) |
+| `0 20 * * 1-5` | 4pm | Reflection | EOD review, calibration, daily recap |
 
 ### Weekends — 1 run/day
-| Cron (UTC) | Toronto | Phases | Focus |
-|------------|---------|--------|-------|
-| `0 15 * * 6` | Sat 11am | Weekend Research + Analysis | Batch deep dives (3-5 companies), sector analysis |
-| `0 15 * * 0` | Sun 11am | Weekly Review | Performance, strategy, stage management, weekly priorities |
+| Cron (UTC) | Toronto | Skill | Focus |
+|------------|---------|-------|-------|
+| `0 15 * * 6` | Sat 11am | Trading Loop (weekend mode) | 3-5 deep dives, no execution |
+| `0 15 * * 0` | Sun 11am | Weekly Review | Performance, strategy, stage management |
 
 ### Explore/Exploit Lifecycle
 Agent tracks maturity via `agent_stage` memory (`explore` → `balanced` → `exploit`):
-- **Explore**: Screen aggressively, 2+ deep dives/day, build watchlist to 15+, rarely trade (0.8+ confidence)
+- **Explore**: Screen aggressively, 2+ deep dives/run, build watchlist to 15+, trade at 0.8+ confidence
 - **Balanced**: Maintain research cadence, check price targets actively, trade at 0.6+ confidence
 - **Exploit**: Focus on position management, research only for new catalysts or replacements
 
 Managed via `agent/scripts/create_crons.py`. **Note**: UTC-based, needs manual adjustment for DST changes (EDT/EST)
+
+## Structured Memory Layer
+
+Memory uses typed schemas stored in `agent_memory` with key prefixes:
+
+| Key Pattern | Tool | Schema |
+|-------------|------|--------|
+| `market_regime` | `update_market_regime()` | `{vix, breadth_pct, rotation_signal, regime_label, confidence, as_of}` |
+| `stock:{SYMBOL}` | `update_stock_analysis()` | `{symbol, thesis, target_entry, target_exit, confidence, bull_case, bear_case, fundamentals_score, status, target_set_date, regime_when_set, last_analyzed}` |
+| `decision:{SYMBOL}:{YYYY-MM-DD}` | `record_decision()` | `{symbol, action, reasoning, confidence, price_at_decision, executed, decided_at}` |
+| `strategy`, `agent_stage`, `risk_appetite` | `write_agent_memory()` | Freeform (unchanged) |
+
+`load_agent_context()` reads structured keys categorically and falls back to legacy format gracefully.
+
+## Conviction-Based Order Logic
+
+Order aggressiveness matches conviction level (Step 7 of trading-loop skill):
+
+| Confidence | Order Type | Rationale |
+|-----------|------------|-----------|
+| 0.85+ | Market order or limit within 0.5% | Get the fill. Missing the trade > paying 2% more. |
+| 0.70-0.85 | Limit 1-2% below current | Want a small pullback. Okay to miss. |
+| 0.60-0.70 | Limit at target_entry | Only buy if it comes to you. |
+
+**Key principle**: Sector rotation is a soft signal, not a hard gate. Don't block high-conviction trades solely because of rotation.
 
 ## Deployment
 
@@ -90,10 +133,10 @@ Managed via `agent/scripts/create_crons.py`. **Note**: UTC-based, needs manual a
 
 | Table | Purpose |
 |-------|---------|
-| `agent_memory` | Key-value persistent beliefs (strategy, market_outlook, risk_appetite, etc.) |
-| `agent_journal` | Timestamped entries (research, analysis, trade, reflection, market_scan) |
+| `agent_memory` | Structured key-value beliefs (market_regime, stock:*, decision:*, strategy, etc.) |
+| `agent_journal` | Timestamped entries (research, analysis, trade, reflection, user_insight) |
 | `trades` | Trade log with thesis, confidence, broker_order_id, status |
-| `watchlist` | Symbols with thesis, target_entry, target_exit |
+| `watchlist` | Symbols with thesis, target_entry, target_exit (auto-synced by update_stock_analysis) |
 | `risk_settings` | Single row: max_position_pct, max_daily_loss, max_total_exposure_pct, default_stop_loss_pct |
 | `profiles` | Web UI viewer profiles |
 
@@ -104,8 +147,9 @@ Managed via `agent/scripts/create_crons.py`. **Note**: UTC-based, needs manual a
 - Auth: Supabase JWT validated via `langgraph_sdk.Auth`, dev mode allows unauthenticated
 - Middleware: `handle_tool_errors` (catch-all safety net) + `ToolRetryMiddleware` (retries for search/quote/historical)
 - Frontend: `@assistant-ui/react` + `@langchain/langgraph-sdk` for streaming chat
-- Memory: `load_agent_context()` reads strategy/outlook/risk_appetite and formats into chat system prompt
+- Memory: `load_agent_context()` reads structured memory (market_regime, stock:*, decision:*) and formats categorically
 - Risk: `check_risk()` is called inside `place_order` — trades that fail risk checks are rejected
+- Chat tool priority: journal/memory first → live market data → internet search last
 
 ## Commands
 
@@ -129,16 +173,21 @@ cd agent && python scripts/seed_stage.py
 
 # Update cron jobs
 cd agent && python scripts/create_crons.py
+
+# Migrate legacy memory to structured format
+cd agent && python scripts/migrate_memory.py
 ```
 
 ## Important Rules
 
 - Chat mode tools are READ-ONLY — never expose `place_order` in chat
-- Autonomous mode writes to `agent_journal` and `agent_memory` after every loop
+- Chat mode checks internal data (journal, memory) BEFORE reaching for internet search
+- Autonomous mode writes structured memory after every loop
 - All trades must pass risk checks before execution (5% stop loss, 80% max exposure, $500 daily loss limit)
 - The agent has ONE persistent identity, not per-user sessions
 - Max 5-8 positions, 10% max per position, 20% cash buffer
 - After each cycle: compare outcomes to thesis, calibrate confidence, update beliefs
+- Sector rotation is a soft signal — don't block high-conviction trades solely because of it
 
 ## Environment Variables
 

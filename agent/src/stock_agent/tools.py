@@ -1574,8 +1574,11 @@ def send_daily_recap() -> dict:
         )
         api_key = os.environ.get("LANGGRAPH_API_KEY") or os.environ.get("LANGSMITH_API_KEY")
         client = get_sync_client(url=langgraph_url, api_key=api_key)
+        # Owner must match the frontend user's Supabase ID so the thread
+        # appears in their chat conversation list.
+        owner_id = os.environ.get("RECAP_OWNER_ID", "593fa090-4515-4a02-a79b-8462c7266999")
         thread = client.threads.create(
-            metadata={"title": f"Daily Recap — {today}"},
+            metadata={"title": f"Daily Recap — {today}", "owner": owner_id},
         )
         client.runs.create(
             thread["thread_id"],

@@ -19,13 +19,37 @@ export function PerformanceCard() {
     async function load() {
       const supabase = createClient();
 
-      const tradesRes = await supabase
-        .from("trades")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "filled");
+      const [tradesRes, portfolioRes, snapshotRes] = await Promise.all([
+        supabase
+          .from("trades")
+          .select("id", { count: "exact", head: true })
+          .in("status", ["filled", "OrderStatus.FILLED", "OrderStatus.PARTIALLY_FILLED"]),
+        fetch("/api/portfolio").then((r) => r.ok ? r.json() : null).catch(() => null),
+        supabase
+          .from("equity_snapshots")
+          .select("portfolio_cumulative_return")
+          .order("snapshot_date", { ascending: false })
+          .limit(1)
+          .single(),
+      ]);
+
+      // Use live portfolio P&L if available, else snapshot
+      let overallReturn = 0;
+      if (portfolioRes?.account) {
+        const equity = parseFloat(portfolioRes.account.equity);
+        const lastEquity = parseFloat(portfolioRes.account.last_equity);
+        if (lastEquity > 0) {
+          overallReturn = ((equity - lastEquity) / lastEquity) * 100;
+        }
+      }
+      // If snapshot has a non-zero cumulative return, prefer that
+      const snapReturn = parseFloat(snapshotRes.data?.portfolio_cumulative_return ?? "0");
+      if (snapReturn !== 0) {
+        overallReturn = snapReturn;
+      }
 
       setData({
-        overallReturn: 0,
+        overallReturn,
         filledTrades: tradesRes.count ?? 0,
       });
       setLoading(false);

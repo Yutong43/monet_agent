@@ -2,6 +2,8 @@
 
 You are conducting the **end-of-day reflection**. This is a lightweight review of today's activity — no research, no trading.
 
+**Tone: Be concise and data-driven.** No self-grading (no letter grades), no "lessons learned" sections, no strategic proposals or multi-paragraph commentary. State the facts, note observations for weekly review, move on. The reflection journal entry should be a factor log, not an essay.
+
 ## Step 0: Load Context (ALWAYS DO THIS FIRST)
 
 1. Run `read_all_agent_memory()` to load all persistent beliefs
@@ -45,20 +47,14 @@ For each held position, run `position_health_check(symbol)`:
 - If position approaching target_exit → consider trimming 50%
 
 ### 4. Factor Performance Evaluation
-- Load today's `factor_rankings` from memory
-- Load today's `decision:*` memory entries
-- For each BUY/SELL decision today:
-  - What was the composite score at time of signal?
-  - Was the fill price reasonable vs the score-implied order type?
-  - Did high-composite stocks move favorably today?
-- Track: are high-composite stocks (80+) outperforming low-composite (60-70)?
+- For each trade today: note composite score, fill price, and current P&L in a single line
+- One-sentence summary: did high-composite stocks (80+) outperform today? Yes/no + data.
+- Do NOT write multi-paragraph analysis or grade yourself — just the numbers.
 
 ### 5. Factor Weight Assessment
-- Review factor weight performance:
-  - Are momentum-driven picks outperforming quality-driven picks?
-  - Are value picks catching up or continuing to lag?
-  - Is EPS revision signal adding alpha vs the 50-default baseline?
-- Note any observations for the weekly review to consider weight adjustments
+- One-line observation per factor: is it contributing to winners or losers?
+- If nothing notable, write "No weight observations today" and move on
+- Save deeper analysis for the weekly review — do NOT propose weight changes here
 
 ### 6. Update Beliefs
 - Revise `market_outlook` if today's data warrants it
@@ -81,12 +77,14 @@ For each held position, run `position_health_check(symbol)`:
 - Prune weak candidates
 
 ### 9. Write Reflection
-Create a journal entry of type "reflection" covering:
-- Performance summary (wins/losses, total P&L)
-- Factor performance: did high-composite stocks outperform?
-- Factor weight observations (for weekly review)
-- Strategy observations (if any)
+Create a journal entry of type "reflection". Keep it **tight — data table + bullet points only**:
+- Portfolio summary: equity, daily P&L, alpha vs SPY (2-3 lines)
+- Position table: symbol, entry, current, P&L%, composite score, status (HOLD/WATCH)
+- Factor observations: 1-2 bullet points max, only if something notable happened
+- Tomorrow's focus: 1-2 bullets
 - Set `run_source='eod_reflection'`
+
+**Do NOT include**: self-assessment grades, lessons learned, strategic proposals, "what went well / what could improve", bull/bear scenario planning, or verbose commentary. Save that for the weekly review.
 
 ### 10. Send Daily Recap (LAST STEP — weekdays only)
 Call `send_daily_recap()` to create a recap thread in the chat tab. This gives the user a summary without digging through journal entries. Do NOT skip this step.
@@ -95,5 +93,5 @@ Call `send_daily_recap()` to create a recap thread in the chat tab. This gives t
 - Be honest about mistakes — don't rationalize bad trades
 - Focus on whether the factor system is producing good signals, not individual outcomes
 - Small, incremental observations > overhauls
-- **Evaluate signal quality**: Did factor-driven trades outperform? Are the weights right?
-- Most loops should result in NO trades — factor scoring identifies opportunity, not urgency
+- **The reflection is a daily log, not a strategy document.** Keep it under 400 words.
+- Save deep analysis, weight change proposals, and strategic thinking for the **weekly review**

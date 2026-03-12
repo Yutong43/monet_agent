@@ -187,6 +187,39 @@ When you ship a meaningful change (new tool, UI restructure, new skill, behavior
 - Use today's date and a short title
 - List 3-5 bullet points summarizing what changed
 
+## Strategic Direction: Where the Edge Actually Is
+
+**Key insight (March 2026):** The current trading loop produces professional-looking analysis but may not generate alpha. Monet's "deep dives" are paraphrasing public data through an LLM trained on the same analyst reports the market already priced in. The explore → balanced → exploit lifecycle simulates human limitations instead of leveraging AI strengths.
+
+**Where AI actually has an edge over retail investors:**
+- **Breadth**: Screen the entire S&P 500/400 in one pass, not 6 stocks on a watchlist
+- **Speed**: React to earnings/events in minutes, not days
+- **Discipline**: No FOMO, no panic selling, no emotional attachment to positions
+- **Consistency**: Execute the same rules every time without drift
+
+**Where AI does NOT have an edge:**
+- Fundamental analysis (the market already prices in everything yfinance returns)
+- "Forming a thesis" (this is just paraphrasing public data)
+- Predicting the future (LLMs are not oracles)
+
+**The LLM adds real value in exactly two places:**
+1. **Interpreting earnings qualitatively** — "revenue beat but guidance was soft because of a one-time export restriction" → don't sell, this is temporary
+2. **Risk sensing** — "VIX is spiking because of geopolitical event, not fundamentals" → don't panic sell
+
+**Future direction (not yet implemented):**
+- Move toward factor-based screening (EPS revision momentum, price momentum, quality, value) across the full universe
+- Replace subjective "confidence scoring" with quantitative factor composites
+- Keep the LLM for earnings interpretation and risk context, not for analysis theater
+- Journal becomes a trade log with metrics, not multi-paragraph essays
+
+**Tradeoff acknowledged**: The current Monet is more fun to watch. The systematic approach is more likely to make money but is boring. Evolution should be incremental — improve signal quality without losing observability.
+
+## Project Files
+
+- **`IDEAS.md`** — Feature backlog with priority ordering. Update when new ideas come up.
+- **`POSTDEPLOY_CHECK.md`** — Ongoing verification checklist for deployed features. Check pending items when reviewing run quality. Move verified items to the completed section.
+- **`web/components/trading/release-log.tsx`** — User-facing release log. Update when shipping meaningful changes.
+
 ## Important Rules
 
 - Chat mode tools are READ-ONLY — never expose `place_order` in chat

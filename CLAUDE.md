@@ -1,9 +1,11 @@
-# Monet Agent — Autonomous AI Investor
+# Monet Agent — Your Private Quant Research Team
 
 ## Project Overview
-An autonomous AI stock trading agent that makes its own trading decisions on a cron schedule (unified trading loop → reflection). Uses Alpaca paper trading, has persistent structured memory in Supabase, and a Next.js web UI for monitoring/chat.
+An AI-native quantitative investing platform that gives every individual investor their own systematic, factor-based research team. Monet scores ~900 stocks on four quantitative factors, executes trades with discipline, and helps users become better investors — more educated, more disciplined, more patient.
 
-**Goal**: Beat the S&P 500 consistently with disciplined risk management. Not chasing home runs — systematic alpha through quality growth investing focused on AI infrastructure.
+**Mission**: Make everyone a better investor. Not by replacing human judgment, but by eliminating emotional mistakes and providing institutional-grade systematic discipline at zero cost.
+
+**Positioning**: Monet is NOT a budget quant fund. It's a **private quant research team** for each individual investor. We don't compete with Renaissance on infrastructure — we compete with the alternative, which is humans making emotional decisions with the same public data.
 
 ## Your Role
 
@@ -192,26 +194,35 @@ When you ship a meaningful change (new tool, UI restructure, new skill, behavior
 - Use today's date and a short title
 - List 3-5 bullet points summarizing what changed
 
-## Strategic Direction: Factor-Based System (Implemented March 2026)
+## Strategic Direction
 
-**Key insight:** The old trading loop produced professional-looking analysis but didn't generate alpha. Monet's "deep dives" were paraphrasing public data through an LLM trained on the same analyst reports the market already priced in.
+### Core Edge: Systematic Discipline for Individuals
 
-**What changed (v0.5+):**
-- `score_universe()` scores ~150 stocks on momentum, quality, value factors deterministically
-- `enrich_eps_revisions()` adds EPS revision signal from Finnhub
-- `generate_factor_rankings()` produces BUY/SELL/HOLD signals — no LLM reasoning
-- Composite score replaces subjective confidence (0-100, not 0.0-1.0 vibes)
-- Explore/balanced/exploit lifecycle removed — every run is systematic
-- Old trading-loop skill preserved for comparison during transition
+The median individual investor underperforms SPY by 3-5% annually (DALBAR). Main causes: FOMO, panic selling, revenge trading, concentration risk, no exit plan. Monet eliminates all of these by design. Even with imperfect factor weights, avoiding behavioral mistakes alone is worth 3-5% annually.
 
-**Where the LLM adds value:**
-1. **Interpreting earnings qualitatively** (Step 3.5) — "revenue beat but guidance was soft because of a one-time export restriction" → don't sell
+**Where AI beats an individual investor:**
+- **Breadth**: Score 900 stocks every run vs following 5-15 you've heard of
+- **No emotions**: Composite score IS the decision — can't panic sell or FOMO buy
+- **Consistency**: Same rules every day, no strategy drift based on mood
+- **Speed**: React to earnings within hours, not days
+- **Risk discipline**: Auto stop-loss + take-profit on every position, enforced in code
+
+**Where the LLM adds unique value:**
+1. **Interpreting earnings qualitatively** (Step 3.5) — "revenue beat but guidance was soft because of a one-time export restriction" → don't sell. No quant firm has this.
 2. **Risk sensing** — "VIX is spiking because of geopolitical event, not fundamentals" → don't panic sell
 
-**Migration path:**
-- Factor-loop and trading-loop coexist — run one cron on each for comparison
-- After 1 week of parallel runs, evaluate signal quality
-- Full cutover when factor system demonstrates better signal quality
+### Factor-Based System (Implemented March 2026)
+
+- `score_universe()` scores ~900 stocks on momentum, quality, value factors deterministically
+- `enrich_eps_revisions()` adds EPS revision signal (estimate direction + analyst breadth) from yfinance
+- `generate_factor_rankings()` produces BUY/SELL/HOLD signals — no LLM reasoning
+- Composite score replaces subjective confidence (0-100, not 0.0-1.0 vibes)
+
+### Future Vision
+
+1. **Personalized portfolios** — Tailor factor weights and universe based on each user's preferences, risk tolerance, and sector interests. Multiple portfolios per user.
+2. **Community + domain expertise** — Monet runs a community where users with domain expertise (e.g., industry engineers, healthcare professionals) contribute qualitative insights that get aggregated as signals. This is a data moat no quant firm has.
+3. **Education** — The goal is to make users better investors, not dependent on Monet. Show them why factor scoring works, what their behavioral biases are, and how to think systematically.
 
 ## Project Files
 

@@ -2,15 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { PerformanceCard, LifecycleCard } from "@/components/trading/performance-card";
+import { PerformanceCard, FactorSystemCard } from "@/components/trading/performance-card";
 import { BenchmarkCard } from "@/components/trading/benchmark-card";
 import { PortfolioSummary, PositionsTable } from "@/components/trading/portfolio-card";
 import { TradeCard } from "@/components/trading/trade-card";
 import { Card, CardContent } from "@/components/ui/card";
 
 export default function DashboardPage() {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [portfolio, setPortfolio] = useState<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [trades, setTrades] = useState<any[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [watchlist, setWatchlist] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -49,7 +52,7 @@ export default function DashboardPage() {
       {/* Row 1: Overview Cards */}
       <div className="grid gap-4 lg:grid-cols-3">
         <PerformanceCard />
-        <LifecycleCard />
+        <FactorSystemCard />
         <BenchmarkCard />
       </div>
 
@@ -82,7 +85,7 @@ export default function DashboardPage() {
                     {watchlist.map((w) => (
                       <tr key={w.id} className="border-b last:border-0">
                         <td className="p-3 font-mono font-semibold">{w.symbol}</td>
-                        <td className="p-3 text-muted-foreground">{w.thesis || "-"}</td>
+                        <td className="p-3 text-muted-foreground text-xs leading-relaxed">{w.thesis || "-"}</td>
                         <td className="p-3">{w.target_entry ? `$${w.target_entry}` : "-"}</td>
                       </tr>
                     ))}

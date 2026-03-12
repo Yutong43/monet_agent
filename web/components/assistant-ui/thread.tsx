@@ -1,16 +1,5 @@
 import { MarkdownText } from "@/components/assistant-ui/markdown-text";
 import { ToolFallback } from "@/components/assistant-ui/tool-fallback";
-import {
-  StockQuoteUI,
-  PortfolioUI,
-  MarketBreadthUI,
-  SectorAnalysisUI,
-  EpsEstimatesUI,
-  TechnicalAnalysisUI,
-  FundamentalAnalysisUI,
-  PeerComparisonUI,
-  PerformanceComparisonUI,
-} from "@/components/assistant-ui/tool-uis";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -194,17 +183,6 @@ const AssistantMessage: FC = () => (
           Text: MarkdownText,
           tools: {
             Fallback: ToolFallback,
-            by_name: {
-              get_stock_quote: StockQuoteUI,
-              get_my_portfolio: PortfolioUI,
-              market_breadth: MarketBreadthUI,
-              sector_analysis: SectorAnalysisUI,
-              eps_estimates: EpsEstimatesUI,
-              technical_analysis: TechnicalAnalysisUI,
-              fundamental_analysis: FundamentalAnalysisUI,
-              peer_comparison: PeerComparisonUI,
-              get_performance_comparison: PerformanceComparisonUI,
-            },
           },
         }}
       />

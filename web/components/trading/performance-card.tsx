@@ -9,7 +9,6 @@ import { cn } from "@/lib/utils";
 interface PerformanceData {
   overallReturn: number;
   filledTrades: number;
-  stage: string;
 }
 
 export function PerformanceCard() {
@@ -20,28 +19,14 @@ export function PerformanceCard() {
     async function load() {
       const supabase = createClient();
 
-      const [stageRes, tradesRes] = await Promise.all([
-        supabase
-          .from("agent_memory")
-          .select("value")
-          .eq("key", "agent_stage")
-          .single(),
-        supabase
-          .from("trades")
-          .select("id", { count: "exact", head: true })
-          .eq("status", "filled"),
-      ]);
-
-      const rawStage = stageRes.data?.value;
-      const stage =
-        typeof rawStage === "string"
-          ? rawStage
-          : rawStage?.stage ?? "explore";
+      const tradesRes = await supabase
+        .from("trades")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "filled");
 
       setData({
         overallReturn: 0,
         filledTrades: tradesRes.count ?? 0,
-        stage,
       });
       setLoading(false);
     }
@@ -62,7 +47,7 @@ export function PerformanceCard() {
 
   if (!data) return null;
 
-  const { overallReturn, filledTrades, stage } = data;
+  const { overallReturn, filledTrades } = data;
   const sign = overallReturn > 0 ? "+" : "";
   const formatted = `${sign}${overallReturn.toFixed(2)}%`;
 
@@ -83,47 +68,69 @@ export function PerformanceCard() {
         </p>
         <p className="text-sm text-muted-foreground">Overall Return</p>
         <p className="text-xs text-muted-foreground/70 mt-3">
-          {filledTrades} trade{filledTrades !== 1 ? "s" : ""} · {capitalize(stage)} stage
+          {filledTrades} trade{filledTrades !== 1 ? "s" : ""} filled
         </p>
       </CardContent>
     </Card>
   );
 }
 
-const STAGES = ["explore", "balanced", "exploit"] as const;
-
-const STAGE_DESCRIPTIONS: Record<string, string> = {
-  explore: "Screening stocks and building a watchlist before committing capital.",
-  balanced: "Actively researching and trading when setups align.",
-  exploit: "Managing positions and harvesting returns.",
-};
-
-interface StageData {
-  stage: string;
-  watchlist_profiles: number;
-  cycles_completed: number;
-  total_trades: number;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+interface FactorRanking {
+  rank: number;
+  symbol: string;
+  composite_score: number;
+  momentum_score: number;
+  quality_score: number;
+  value_score: number;
+  eps_revision_score: number;
 }
 
-export function LifecycleCard() {
-  const [data, setData] = useState<StageData | null>(null);
+interface FactorData {
+  weights: { momentum: number; quality: number; value: number; eps_revision: number } | null;
+  topRankings: FactorRanking[];
+  scoredAt: string | null;
+  universeSize: number | null;
+}
+
+export function FactorSystemCard() {
+  const [data, setData] = useState<FactorData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
       const supabase = createClient();
-      const res = await supabase
-        .from("agent_memory")
-        .select("value")
-        .eq("key", "agent_stage")
-        .single();
 
-      const raw = res.data?.value;
+      const [weightsRes, rankingsRes] = await Promise.all([
+        supabase
+          .from("agent_memory")
+          .select("value")
+          .eq("key", "factor_weights")
+          .single(),
+        supabase
+          .from("agent_memory")
+          .select("value")
+          .eq("key", "factor_rankings")
+          .single(),
+      ]);
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const weightsVal = weightsRes.data?.value as any;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rankingsVal = rankingsRes.data?.value as any;
+
       setData({
-        stage: raw?.stage ?? "explore",
-        watchlist_profiles: raw?.watchlist_profiles ?? 0,
-        cycles_completed: raw?.cycles_completed ?? 0,
-        total_trades: raw?.total_trades ?? 0,
+        weights: weightsVal
+          ? {
+              momentum: weightsVal.momentum ?? 0.35,
+              quality: weightsVal.quality ?? 0.30,
+              value: weightsVal.value ?? 0.20,
+              eps_revision: weightsVal.eps_revision ?? 0.15,
+            }
+          : null,
+        topRankings: rankingsVal?.top_10 ?? rankingsVal?.rankings ?? [],
+        scoredAt: rankingsVal?.scored_at ?? null,
+        universeSize: rankingsVal?.universe_size ?? null,
       });
       setLoading(false);
     }
@@ -144,94 +151,84 @@ export function LifecycleCard() {
 
   if (!data) return null;
 
-  const currentIndex = STAGES.indexOf(data.stage as typeof STAGES[number]);
-  const safeIndex = currentIndex === -1 ? 0 : currentIndex;
-
-  // Progress stat for current stage
-  let progressLabel: string;
-  let progressValue: string;
-  if (data.stage === "explore") {
-    const profilePct = Math.min(data.watchlist_profiles / 15, 1);
-    const cyclePct = Math.min(data.cycles_completed / 30, 1);
-    const avg = ((profilePct + cyclePct) / 2) * 100;
-    progressLabel = "Progress to Balanced";
-    progressValue = `${Math.round(avg)}%`;
-  } else if (data.stage === "balanced") {
-    const tradePct = Math.min(data.total_trades / 10, 1);
-    const profilePct = Math.min(data.watchlist_profiles / 25, 1);
-    const avg = ((tradePct + profilePct) / 2) * 100;
-    progressLabel = "Progress to Exploit";
-    progressValue = `${Math.round(avg)}%`;
-  } else {
-    progressLabel = "Lifecycle";
-    progressValue = "Complete";
-  }
+  const top5 = data.topRankings.slice(0, 5);
 
   return (
     <Card>
       <CardContent className="p-6 space-y-4">
         <div className="flex items-center justify-between">
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Lifecycle
+            Factor System
           </p>
-          <p className="text-xs text-muted-foreground">
-            <span className="font-medium text-foreground">{progressValue}</span>{" "}
-            {data.stage !== "exploit" && (
-              <span className="text-muted-foreground/70">{progressLabel.replace("Progress to ", "→ ")}</span>
-            )}
-          </p>
+          {data.universeSize && (
+            <p className="text-xs text-muted-foreground">
+              {data.universeSize} stocks scored
+            </p>
+          )}
         </div>
 
-        {/* 3-segment progress bar */}
-        <div className="flex gap-1">
-          {STAGES.map((s, i) => (
-            <div
-              key={s}
-              className={cn(
-                "h-2 flex-1 rounded-full",
-                i <= safeIndex ? "bg-primary" : "bg-muted"
-              )}
-            />
-          ))}
-        </div>
-
-        {/* Stage labels */}
-        <div className="flex justify-between text-[10px] text-muted-foreground/70">
-          {STAGES.map((s, i) => (
-            <span
-              key={s}
-              className={cn(
-                i === safeIndex && "text-foreground font-medium"
-              )}
-            >
-              {capitalize(s)}
-            </span>
-          ))}
-        </div>
-
-        {/* Description */}
-        <p className="text-xs text-muted-foreground leading-relaxed">
-          {STAGE_DESCRIPTIONS[data.stage] ?? STAGE_DESCRIPTIONS.explore}
-        </p>
-
-        {/* Current stage stats */}
-        {data.stage === "explore" && (
-          <div className="flex gap-4 text-xs text-muted-foreground pt-1">
-            <span>{data.watchlist_profiles}/15 profiles</span>
-            <span>{data.cycles_completed}/30 cycles</span>
+        {/* Factor weights bar */}
+        {data.weights && (
+          <div className="space-y-1.5">
+            <div className="flex h-2.5 rounded-full overflow-hidden">
+              <div className="bg-blue-500" style={{ width: `${data.weights.momentum * 100}%` }} />
+              <div className="bg-emerald-500" style={{ width: `${data.weights.quality * 100}%` }} />
+              <div className="bg-amber-500" style={{ width: `${data.weights.value * 100}%` }} />
+              <div className="bg-purple-500" style={{ width: `${data.weights.eps_revision * 100}%` }} />
+            </div>
+            <div className="flex justify-between text-[10px] text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <span className="inline-block size-1.5 rounded-full bg-blue-500" />
+                Mom {Math.round(data.weights.momentum * 100)}%
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block size-1.5 rounded-full bg-emerald-500" />
+                Qual {Math.round(data.weights.quality * 100)}%
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block size-1.5 rounded-full bg-amber-500" />
+                Val {Math.round(data.weights.value * 100)}%
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block size-1.5 rounded-full bg-purple-500" />
+                EPS {Math.round(data.weights.eps_revision * 100)}%
+              </span>
+            </div>
           </div>
         )}
-        {data.stage === "balanced" && (
-          <div className="flex gap-4 text-xs text-muted-foreground pt-1">
-            <span>{data.total_trades}/10 trades</span>
-            <span>{data.watchlist_profiles}/25 profiles</span>
+
+        {/* Top 5 rankings */}
+        {top5.length > 0 && (
+          <div className="space-y-1">
+            {top5.map((r) => (
+              <div key={r.symbol} className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground w-4">#{r.rank}</span>
+                  <span className="font-semibold">{r.symbol}</span>
+                </div>
+                <span
+                  className={cn(
+                    "font-semibold tabular-nums",
+                    r.composite_score >= 80
+                      ? "text-green-600"
+                      : r.composite_score >= 70
+                        ? "text-yellow-600"
+                        : "text-muted-foreground"
+                  )}
+                >
+                  {r.composite_score?.toFixed(1)}
+                </span>
+              </div>
+            ))}
           </div>
+        )}
+
+        {data.scoredAt && (
+          <p className="text-[10px] text-muted-foreground/60">
+            Last scored: {new Date(data.scoredAt).toLocaleString()}
+          </p>
         )}
       </CardContent>
     </Card>
   );
-}
-
-function capitalize(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
 }

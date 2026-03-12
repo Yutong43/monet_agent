@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Monet Agent",
-  description: "Autonomous AI stock trading agent",
+  title: "Monet — Your Private Quant Research Team",
+  description: "AI-native quantitative investing. Score 900 stocks, execute with discipline, become a better investor.",
   icons: {
     icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎨</text></svg>",
   },

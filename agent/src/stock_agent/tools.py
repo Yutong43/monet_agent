@@ -2119,15 +2119,15 @@ def score_universe(top_n: int = 30) -> dict:
 
 
 def enrich_eps_revisions(symbols: list[str]) -> dict:
-    """Enrich top-ranked stocks with EPS revision scores from Finnhub.
+    """Enrich top-ranked stocks with EPS revision scores using yfinance eps_trend.
 
-    For each symbol, fetches quarterly EPS estimates and scores based on
-    revision direction:
-    - Rising revisions → 70-85
-    - Flat → 50
-    - Falling revisions → 15-30
+    For each symbol, fetches analyst EPS estimate revisions (current vs 30 days ago)
+    and scores based on revision direction:
+    - Rising revisions (current > 30d ago by 3%+) → 70-85
+    - Flat (within 3%) → 50
+    - Falling revisions (current < 30d ago by 3%+) → 15-30
 
-    Respects Finnhub free tier rate limit (60 calls/min) with built-in delays.
+    Uses yfinance (free, no API key needed). Each call takes ~0.5s.
 
     Args:
         symbols: List of ticker symbols to enrich (recommended: top 20).
@@ -2135,52 +2135,49 @@ def enrich_eps_revisions(symbols: list[str]) -> dict:
     Returns:
         Dict with enriched list of symbols and their EPS revision scores.
     """
-    fh = get_finnhub()
     enriched = []
 
-    for i, sym in enumerate(symbols[:20]):  # Hard cap at 20 for rate limiting
-        if i > 0:
-            time.sleep(1)  # Finnhub free tier: 60 calls/min, pace at 1/sec
-
+    for sym in symbols[:20]:  # Cap at 20
         try:
-            # Retry once on 403 (rate limit) with backoff
-            try:
-                data = fh.company_eps_estimates(sym, freq="quarterly")
-            except Exception as retry_err:
-                if "403" in str(retry_err):
-                    time.sleep(5)  # Back off on rate limit
-                    data = fh.company_eps_estimates(sym, freq="quarterly")
-                else:
-                    raise retry_err
-            estimates = data.get("data", [])
+            ticker = yf.Ticker(sym)
+            eps_trend = ticker.eps_trend
 
-            if len(estimates) >= 2:
-                curr = estimates[0].get("epsAvg")
-                nxt = estimates[1].get("epsAvg")
+            if eps_trend is None or eps_trend.empty:
+                enriched.append({
+                    "symbol": sym,
+                    "eps_revision_score": 50.0,
+                    "revision_signal": "no_data",
+                    "next_quarter_eps_avg": None,
+                })
+                continue
 
-                if curr is not None and nxt is not None:
-                    if nxt > curr * 1.03:
-                        # Rising revisions
-                        pct_change = (nxt - curr) / abs(curr) if curr != 0 else 0
-                        score = min(85, 70 + pct_change * 100)
-                        signal = "rising"
-                    elif nxt < curr * 0.97:
-                        # Falling revisions
-                        pct_change = (curr - nxt) / abs(curr) if curr != 0 else 0
-                        score = max(15, 30 - pct_change * 100)
-                        signal = "falling"
-                    else:
-                        score = 50.0
-                        signal = "flat"
+            # Use next quarter row ("0q") — current estimate vs 30 days ago
+            if "0q" in eps_trend.index:
+                row = eps_trend.loc["0q"]
+            else:
+                row = eps_trend.iloc[0]
+
+            current = row.get("current")
+            thirty_days_ago = row.get("30daysAgo")
+            next_q_eps = float(current) if current is not None else None
+
+            if current is not None and thirty_days_ago is not None and thirty_days_ago != 0:
+                pct_change = (float(current) - float(thirty_days_ago)) / abs(float(thirty_days_ago))
+
+                if pct_change > 0.03:
+                    # Rising revisions
+                    score = min(85.0, 70.0 + pct_change * 100)
+                    signal = "rising"
+                elif pct_change < -0.03:
+                    # Falling revisions
+                    score = max(15.0, 30.0 + pct_change * 100)  # pct_change is negative
+                    signal = "falling"
                 else:
                     score = 50.0
-                    signal = "no_data"
-
-                next_q_eps = estimates[0].get("epsAvg")
+                    signal = "flat"
             else:
                 score = 50.0
-                signal = "insufficient_data"
-                next_q_eps = None
+                signal = "no_data"
 
             enriched.append({
                 "symbol": sym,

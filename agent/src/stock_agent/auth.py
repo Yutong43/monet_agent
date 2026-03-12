@@ -67,7 +67,10 @@ async def add_owner(
     explicit owner in metadata, that owner is preserved for the frontend
     to discover. Regular users are always scoped to their own resources.
     """
-    metadata = value.setdefault("metadata", {})
+    metadata = value.get("metadata")
+    if metadata is None:
+        metadata = {}
+        value["metadata"] = metadata
     if ctx.user.identity == "dev-user":
         # Service callers: preserve explicit owner, no restrictive filter
         if not metadata.get("owner"):

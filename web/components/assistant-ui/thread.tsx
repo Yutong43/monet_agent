@@ -23,6 +23,7 @@ import {
   CopyIcon,
   PencilIcon,
   RefreshCwIcon,
+  ChevronDownIcon,
   SquareIcon,
 } from "lucide-react";
 import type { FC } from "react";
@@ -126,7 +127,20 @@ const Composer: FC = () => (
         autoFocus
         aria-label="Message input"
       />
-      <div className="relative mx-2 mb-2 flex items-center justify-end">
+      <div className="relative mx-2 mb-2 flex items-center justify-between">
+        <button
+          type="button"
+          className="md:hidden size-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+          onClick={() => {
+            if (document.activeElement instanceof HTMLElement) {
+              document.activeElement.blur();
+            }
+          }}
+          aria-label="Dismiss keyboard"
+        >
+          <ChevronDownIcon className="size-4" />
+        </button>
+        <div className="hidden md:block" />
         <AuiIf condition={(s) => !s.thread.isRunning}>
           <ComposerPrimitive.Send asChild>
             <TooltipIconButton

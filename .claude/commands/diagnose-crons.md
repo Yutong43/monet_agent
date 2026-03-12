@@ -143,7 +143,38 @@ Look for:
 - Is it setting price targets? (analysis entries should mention targets)
 - Is it doing DCA analysis? (trade entries should assess fundamentals before selling)
 
-## Step 7: Generate Report
+## Step 7: Verification Checklist
+
+Read `POSTDEPLOY_CHECK.md` at the project root. This file tracks pending feature verifications with specific trigger conditions.
+
+For each item in the **Pending Verification** section:
+1. Check if the trigger condition has been met (e.g. "MU reported earnings" or "first trading loop after deploy")
+2. If yes, verify each checkbox by querying the database for evidence
+3. Mark items as checked `[x]` if verified, or flag failures
+4. Move fully verified sections to the **Verified** section with today's date
+5. If a check fails, note what went wrong and propose a fix
+
+Key queries for verification:
+```sql
+-- Check for earnings_reaction memories
+SELECT key, value FROM agent_memory WHERE key LIKE 'earnings_reaction:%';
+
+-- Check if eps_estimates was used (look for it in journal content)
+SELECT title, content FROM agent_journal
+WHERE content ILIKE '%eps_estimates%' OR content ILIKE '%estimate revision%'
+ORDER BY created_at DESC LIMIT 5;
+
+-- Check recap format
+SELECT entry_type, title, LEFT(content, 300) FROM agent_journal
+WHERE entry_type = 'reflection' AND created_at >= CURRENT_DATE
+ORDER BY created_at DESC LIMIT 1;
+```
+
+Update the file with your findings — check off verified items, move completed sections, add new pending items if you discover untested behaviors.
+
+## Step 8: Generate Report
+
+**Include a Checklist Summary section in the report:**
 
 Summarize findings in this structure:
 
@@ -169,6 +200,12 @@ Summarize findings in this structure:
 ### Memory Health
 - Which memories are fresh vs stale?
 - Any critical memories missing?
+
+### Verification Checklist
+- How many pending items were verifiable this run?
+- How many passed vs failed?
+- Any new items to add based on today's findings?
+- List items moved to Verified
 
 ### Proposals
 Based on findings, propose:

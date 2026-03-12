@@ -107,6 +107,7 @@ Memory uses typed schemas stored in `agent_memory` with key prefixes:
 | `market_regime` | `update_market_regime()` | `{vix, breadth_pct, rotation_signal, regime_label, confidence, as_of}` |
 | `stock:{SYMBOL}` | `update_stock_analysis()` | `{symbol, thesis, target_entry, target_exit, confidence, bull_case, bear_case, fundamentals_score, status, target_set_date, regime_when_set, last_analyzed}` |
 | `decision:{SYMBOL}:{YYYY-MM-DD}` | `record_decision()` | `{symbol, action, reasoning, confidence, price_at_decision, executed, decided_at}` |
+| `earnings_reaction:{SYMBOL}` | `write_agent_memory()` | `{quarter, actual_eps, estimated_eps, surprise_pct, guidance, estimate_revision, thesis_impact, action_taken, date}` |
 | `strategy`, `agent_stage`, `risk_appetite` | `write_agent_memory()` | Freeform (unchanged) |
 
 `load_agent_context()` reads structured keys categorically and falls back to legacy format gracefully.

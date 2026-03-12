@@ -7,11 +7,8 @@ import {
   TrendingUpIcon,
   TrendingDownIcon,
   MinusIcon,
-  ShieldIcon,
   ActivityIcon,
   BarChart3Icon,
-  ArrowUpIcon,
-  ArrowDownIcon,
 } from "lucide-react";
 
 // ============================================================
@@ -70,9 +67,7 @@ function Badge({ children, variant = "default" }: { children: React.ReactNode; v
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function ToolCard({ children, isRunning }: { children: React.ReactNode; isRunning: boolean }) {
-  if (isRunning) return null;
+function ToolCard({ children }: { children: React.ReactNode }) {
   return (
     <Card className="my-2 overflow-hidden">
       <CardContent className="p-4">{children}</CardContent>
@@ -86,14 +81,14 @@ function ToolCard({ children, isRunning }: { children: React.ReactNode; isRunnin
 
 export const StockQuoteUI = makeAssistantToolUI({
   toolName: "get_stock_quote",
-  render: ({ result, status }) => {
-    if (status?.type === "running" || !result) return null;
+  render: ({ result }) => {
+    if (!result) return null;
     const data = typeof result === "string" ? JSON.parse(result) : result;
     const isIndex = "price" in data;
 
     if (isIndex) {
       return (
-        <ToolCard isRunning={false}>
+        <ToolCard>
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-semibold">{data.symbol}</p>
@@ -113,7 +108,7 @@ export const StockQuoteUI = makeAssistantToolUI({
       : data.bid_price || data.ask_price;
 
     return (
-      <ToolCard isRunning={false}>
+      <ToolCard>
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm font-semibold">{data.symbol}</p>
@@ -135,13 +130,13 @@ export const StockQuoteUI = makeAssistantToolUI({
 
 export const PortfolioUI = makeAssistantToolUI({
   toolName: "get_my_portfolio",
-  render: ({ result, status }) => {
-    if (status?.type === "running" || !result) return null;
+  render: ({ result }) => {
+    if (!result) return null;
     const data = typeof result === "string" ? JSON.parse(result) : result;
     const positions = data.positions || [];
 
     return (
-      <ToolCard isRunning={false}>
+      <ToolCard>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 mb-3">
           <div>
             <p className="text-xs text-muted-foreground">Equity</p>
@@ -199,8 +194,8 @@ export const PortfolioUI = makeAssistantToolUI({
 
 export const MarketBreadthUI = makeAssistantToolUI({
   toolName: "market_breadth",
-  render: ({ result, status }) => {
-    if (status?.type === "running" || !result) return null;
+  render: ({ result }) => {
+    if (!result) return null;
     const data = typeof result === "string" ? JSON.parse(result) : result;
 
     const regimeColor = data.regime?.includes("bull") || data.regime?.includes("uptrend")
@@ -210,7 +205,7 @@ export const MarketBreadthUI = makeAssistantToolUI({
         : "yellow";
 
     return (
-      <ToolCard isRunning={false}>
+      <ToolCard>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <ActivityIcon className="size-4 text-muted-foreground" />
@@ -253,8 +248,8 @@ function BreadthBar({ label, value }: { label: string; value: number }) {
 
 export const SectorAnalysisUI = makeAssistantToolUI({
   toolName: "sector_analysis",
-  render: ({ result, status }) => {
-    if (status?.type === "running" || !result) return null;
+  render: ({ result }) => {
+    if (!result) return null;
     const data = typeof result === "string" ? JSON.parse(result) : result;
     const sectors = (data.sectors || [])
       .slice()
@@ -263,7 +258,7 @@ export const SectorAnalysisUI = makeAssistantToolUI({
     const rotationColor = data.rotation_signal === "risk-on" ? "green" : data.rotation_signal === "risk-off" ? "red" : "yellow";
 
     return (
-      <ToolCard isRunning={false}>
+      <ToolCard>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <BarChart3Icon className="size-4 text-muted-foreground" />
@@ -282,9 +277,7 @@ export const SectorAnalysisUI = makeAssistantToolUI({
                 <span className="w-28 truncate text-muted-foreground">{s.sector}</span>
                 <div className="flex-1 flex items-center h-4">
                   <div className="relative w-full h-3">
-                    {/* Center line */}
                     <div className="absolute left-1/2 top-0 h-full w-px bg-border" />
-                    {/* Bar */}
                     <div
                       className={cn(
                         "absolute top-0.5 h-2 rounded-sm",
@@ -315,8 +308,8 @@ export const SectorAnalysisUI = makeAssistantToolUI({
 
 export const EpsEstimatesUI = makeAssistantToolUI({
   toolName: "eps_estimates",
-  render: ({ args, result, status }) => {
-    if (status?.type === "running" || !result) return null;
+  render: ({ result }) => {
+    if (!result) return null;
     const data = typeof result === "string" ? JSON.parse(result) : result;
     if (data.error || !data.estimates?.length) return null;
 
@@ -325,7 +318,7 @@ export const EpsEstimatesUI = makeAssistantToolUI({
     const signalColor = signal === "rising" ? "green" : signal === "falling" ? "red" : "yellow";
 
     return (
-      <ToolCard isRunning={false}>
+      <ToolCard>
         <div className="flex items-center justify-between mb-3">
           <p className="text-sm font-semibold">{data.symbol} EPS Estimates</p>
           {signal && (
@@ -370,8 +363,8 @@ export const EpsEstimatesUI = makeAssistantToolUI({
 
 export const TechnicalAnalysisUI = makeAssistantToolUI({
   toolName: "technical_analysis",
-  render: ({ result, status }) => {
-    if (status?.type === "running" || !result) return null;
+  render: ({ result }) => {
+    if (!result) return null;
     const data = typeof result === "string" ? JSON.parse(result) : result;
     if (data.error) return null;
 
@@ -379,7 +372,7 @@ export const TechnicalAnalysisUI = makeAssistantToolUI({
     const signals = data.signals || [];
 
     return (
-      <ToolCard isRunning={false}>
+      <ToolCard>
         <div className="flex items-center justify-between mb-3">
           <p className="text-sm font-semibold">{data.symbol} Technicals</p>
           <span className="text-xs text-muted-foreground">{fmt(data.price)}</span>
@@ -444,8 +437,8 @@ export const TechnicalAnalysisUI = makeAssistantToolUI({
 
 export const FundamentalAnalysisUI = makeAssistantToolUI({
   toolName: "fundamental_analysis",
-  render: ({ result, status }) => {
-    if (status?.type === "running" || !result) return null;
+  render: ({ result }) => {
+    if (!result) return null;
     const data = typeof result === "string" ? JSON.parse(result) : result;
 
     const recColor = data.recommendation === "strong_buy" || data.recommendation === "buy"
@@ -455,7 +448,7 @@ export const FundamentalAnalysisUI = makeAssistantToolUI({
         : "yellow";
 
     return (
-      <ToolCard isRunning={false}>
+      <ToolCard>
         <div className="flex items-center justify-between mb-3">
           <div>
             <p className="text-sm font-semibold">{data.symbol}</p>
@@ -504,13 +497,13 @@ function Metric({ label, value, highlight }: { label: string; value: string | un
 
 export const PeerComparisonUI = makeAssistantToolUI({
   toolName: "peer_comparison",
-  render: ({ result, status }) => {
-    if (status?.type === "running" || !result) return null;
+  render: ({ result }) => {
+    if (!result) return null;
     const data = typeof result === "string" ? JSON.parse(result) : result;
     if (data.error || !data.comparisons?.length) return null;
 
     return (
-      <ToolCard isRunning={false}>
+      <ToolCard>
         <p className="text-sm font-semibold mb-3">{data.symbol} vs Peers</p>
         <div className="overflow-x-auto -mx-4 px-4">
           <table className="w-full text-xs">
@@ -552,13 +545,13 @@ export const PeerComparisonUI = makeAssistantToolUI({
 
 export const PerformanceComparisonUI = makeAssistantToolUI({
   toolName: "get_performance_comparison",
-  render: ({ result, status }) => {
-    if (status?.type === "running" || !result) return null;
+  render: ({ result }) => {
+    if (!result) return null;
     const data = typeof result === "string" ? JSON.parse(result) : result;
     if (data.error) return null;
 
     return (
-      <ToolCard isRunning={false}>
+      <ToolCard>
         <div className="flex items-center justify-between mb-3">
           <p className="text-sm font-semibold">Performance vs SPY ({data.period_days}d)</p>
           <Badge variant={data.alpha_pct >= 0 ? "green" : "red"}>

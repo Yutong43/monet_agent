@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { PerformanceCard, FactorSystemCard } from "@/components/trading/performance-card";
 import { BenchmarkCard } from "@/components/trading/benchmark-card";
 import { PortfolioSummary, PositionsTable } from "@/components/trading/portfolio-card";
-import { TradeCard } from "@/components/trading/trade-card";
+import { TradeCard, TradeCardCompact } from "@/components/trading/trade-card";
 import { Card, CardContent } from "@/components/ui/card";
 
 export default function DashboardPage() {
@@ -96,15 +96,52 @@ export default function DashboardPage() {
           )}
         </div>
 
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold">Recent Trades</h2>
-          {trades.length === 0 ? (
-            <Card><CardContent className="p-4 text-center text-muted-foreground">No trades yet</CardContent></Card>
-          ) : (
-            trades.map((t) => <TradeCard key={t.id} trade={t} />)
-          )}
-        </div>
+        <RecentTrades trades={trades} />
       </div>
+    </div>
+  );
+}
+
+const VISIBLE_COUNT = 3;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function RecentTrades({ trades }: { trades: any[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const visible = expanded ? trades : trades.slice(0, VISIBLE_COUNT);
+  const hiddenCount = trades.length - VISIBLE_COUNT;
+
+  return (
+    <div className="space-y-4">
+      <h2 className="text-lg font-semibold">Recent Trades</h2>
+      {trades.length === 0 ? (
+        <Card><CardContent className="p-4 text-center text-muted-foreground">No trades yet</CardContent></Card>
+      ) : (
+        <>
+          {visible.map((t, i) =>
+            i < VISIBLE_COUNT ? (
+              <TradeCard key={t.id} trade={t} />
+            ) : (
+              <TradeCardCompact key={t.id} trade={t} />
+            )
+          )}
+          {hiddenCount > 0 && !expanded && (
+            <button
+              onClick={() => setExpanded(true)}
+              className="w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors py-2"
+            >
+              Show {hiddenCount} older trade{hiddenCount !== 1 ? "s" : ""}
+            </button>
+          )}
+          {expanded && hiddenCount > 0 && (
+            <button
+              onClick={() => setExpanded(false)}
+              className="w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors py-2"
+            >
+              Show less
+            </button>
+          )}
+        </>
+      )}
     </div>
   );
 }

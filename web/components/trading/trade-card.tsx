@@ -16,14 +16,39 @@ interface Trade {
   created_at: string;
 }
 
-export function TradeCard({ trade }: { trade: Trade }) {
-  const isBuy = trade.side === "buy";
-  const date = new Date(trade.created_at).toLocaleDateString("en-US", {
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+export function TradeCardCompact({ trade }: { trade: Trade }) {
+  const isBuy = trade.side === "buy";
+
+  return (
+    <div className="flex items-center justify-between px-4 py-2 border rounded-lg text-sm">
+      <div className="flex items-center gap-2">
+        <span className={cn(
+          "rounded px-1.5 py-0.5 text-xs font-bold uppercase",
+          isBuy ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+        )}>
+          {trade.side}
+        </span>
+        <span className="font-mono font-semibold">{trade.symbol}</span>
+        <span className="text-muted-foreground">{trade.quantity} shares</span>
+      </div>
+      <span className="text-xs text-muted-foreground">{formatDate(trade.created_at)}</span>
+    </div>
+  );
+}
+
+export function TradeCard({ trade }: { trade: Trade }) {
+  const isBuy = trade.side === "buy";
+  const date = formatDate(trade.created_at);
 
   return (
     <Card>

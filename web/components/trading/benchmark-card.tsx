@@ -14,20 +14,32 @@ interface Snapshot {
   deployed_pct: number;
 }
 
+const STARTING_EQUITY = 100_000;
+
 export function BenchmarkCard() {
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
+  const [liveReturnPct, setLiveReturnPct] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
       const supabase = createClient();
-      const { data } = await supabase
-        .from("equity_snapshots")
-        .select("snapshot_date, portfolio_cumulative_return, spy_cumulative_return, alpha, deployed_pct")
-        .order("snapshot_date", { ascending: true })
-        .limit(90);
+      const [snapshotRes, portfolioRes] = await Promise.all([
+        supabase
+          .from("equity_snapshots")
+          .select("snapshot_date, portfolio_cumulative_return, spy_cumulative_return, alpha, deployed_pct")
+          .order("snapshot_date", { ascending: true })
+          .limit(90),
+        fetch("/api/portfolio").then((r) => r.ok ? r.json() : null).catch(() => null),
+      ]);
 
-      setSnapshots((data as Snapshot[] | null) ?? []);
+      setSnapshots((snapshotRes.data as Snapshot[] | null) ?? []);
+
+      if (portfolioRes?.account?.equity) {
+        const equity = portfolioRes.account.equity;
+        setLiveReturnPct(((equity - STARTING_EQUITY) / STARTING_EQUITY) * 100);
+      }
+
       setLoading(false);
     }
     load();
@@ -46,11 +58,11 @@ export function BenchmarkCard() {
   }
 
   const latest = snapshots.length > 0 ? snapshots[snapshots.length - 1] : null;
-  const alpha = latest?.alpha;
   const deployedPct = latest?.deployed_pct ?? 0;
-  const isMeaningful = alpha != null;
-  const portfolioReturn = latest?.portfolio_cumulative_return ?? 0;
+  const portfolioReturn = liveReturnPct ?? latest?.portfolio_cumulative_return ?? 0;
   const spyReturn = latest?.spy_cumulative_return ?? 0;
+  const alpha = portfolioReturn - spyReturn;
+  const isMeaningful = latest?.alpha != null;
 
   return (
     <Card>

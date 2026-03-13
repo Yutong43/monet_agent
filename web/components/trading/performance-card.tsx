@@ -8,6 +8,9 @@ import { cn } from "@/lib/utils";
 
 interface PerformanceData {
   overallReturn: number;
+  currentEquity: number;
+  startingEquity: number;
+  dailyPnl: number;
   filledTrades: number;
 }
 
@@ -19,37 +22,28 @@ export function PerformanceCard() {
     async function load() {
       const supabase = createClient();
 
-      const [tradesRes, portfolioRes, snapshotRes] = await Promise.all([
+      const STARTING_EQUITY = 100_000;
+
+      const [tradesRes, portfolioRes] = await Promise.all([
         supabase
           .from("trades")
           .select("id", { count: "exact", head: true })
           .in("status", ["filled", "OrderStatus.FILLED", "OrderStatus.PARTIALLY_FILLED"]),
         fetch("/api/portfolio").then((r) => r.ok ? r.json() : null).catch(() => null),
-        supabase
-          .from("equity_snapshots")
-          .select("portfolio_cumulative_return")
-          .order("snapshot_date", { ascending: false })
-          .limit(1)
-          .single(),
       ]);
 
-      // Use live portfolio P&L if available, else snapshot
-      let overallReturn = 0;
-      if (portfolioRes?.account) {
-        const equity = parseFloat(portfolioRes.account.equity);
-        const lastEquity = parseFloat(portfolioRes.account.last_equity);
-        if (lastEquity > 0) {
-          overallReturn = ((equity - lastEquity) / lastEquity) * 100;
-        }
-      }
-      // If snapshot has a non-zero cumulative return, prefer that
-      const snapReturn = parseFloat(snapshotRes.data?.portfolio_cumulative_return ?? "0");
-      if (snapReturn !== 0) {
-        overallReturn = snapReturn;
-      }
+      const acct = portfolioRes?.account;
+      const currentEquity = acct?.equity ?? 0;
+      const startingEquity = STARTING_EQUITY;
+      const overallReturn = currentEquity > 0
+        ? ((currentEquity - startingEquity) / startingEquity) * 100
+        : 0;
 
       setData({
         overallReturn,
+        currentEquity,
+        startingEquity,
+        dailyPnl: acct?.daily_pnl ?? 0,
         filledTrades: tradesRes.count ?? 0,
       });
       setLoading(false);
@@ -71,13 +65,16 @@ export function PerformanceCard() {
 
   if (!data) return null;
 
-  const { overallReturn, filledTrades } = data;
+  const { overallReturn, currentEquity, startingEquity, dailyPnl, filledTrades } = data;
   const sign = overallReturn > 0 ? "+" : "";
   const formatted = `${sign}${overallReturn.toFixed(2)}%`;
+  const dailySign = dailyPnl >= 0 ? "+" : "";
+  const fmt = (n: number) =>
+    n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
   return (
     <Card>
-      <CardContent className="p-8 flex flex-col items-center gap-1">
+      <CardContent className="p-8 flex flex-col items-center gap-3">
         <p
           className={cn(
             "text-4xl font-bold tracking-tight",
@@ -91,9 +88,33 @@ export function PerformanceCard() {
           {formatted}
         </p>
         <p className="text-sm text-muted-foreground">Overall Return</p>
-        <p className="text-xs text-muted-foreground/70 mt-3">
-          {filledTrades} trade{filledTrades !== 1 ? "s" : ""} filled
-        </p>
+
+        {startingEquity > 0 && (
+          <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
+            <span>{fmt(startingEquity)}</span>
+            <span className="text-muted-foreground/40">&rarr;</span>
+            <span className="font-semibold text-foreground">{fmt(currentEquity)}</span>
+          </div>
+        )}
+
+        <div className="flex items-center gap-3 mt-1 text-xs">
+          <span
+            className={cn(
+              "font-medium",
+              dailyPnl > 0
+                ? "text-green-600"
+                : dailyPnl < 0
+                  ? "text-red-500"
+                  : "text-muted-foreground"
+            )}
+          >
+            {dailySign}{fmt(dailyPnl)} today
+          </span>
+          <span className="text-muted-foreground/40">&middot;</span>
+          <span className="text-muted-foreground">
+            {filledTrades} trade{filledTrades !== 1 ? "s" : ""} filled
+          </span>
+        </div>
       </CardContent>
     </Card>
   );

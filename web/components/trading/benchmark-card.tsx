@@ -36,8 +36,10 @@ export function BenchmarkCard() {
       setSnapshots((snapshotRes.data as Snapshot[] | null) ?? []);
 
       if (portfolioRes?.account?.equity) {
-        const equity = portfolioRes.account.equity;
-        setLiveReturnPct(((equity - STARTING_EQUITY) / STARTING_EQUITY) * 100);
+        const equity = parseFloat(portfolioRes.account.equity);
+        if (equity > 0) {
+          setLiveReturnPct(((equity - STARTING_EQUITY) / STARTING_EQUITY) * 100);
+        }
       }
 
       setLoading(false);

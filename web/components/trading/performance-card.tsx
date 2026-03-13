@@ -33,7 +33,10 @@ export function PerformanceCard() {
       ]);
 
       const acct = portfolioRes?.account;
-      const currentEquity = acct?.equity ?? 0;
+      const currentEquity = acct?.equity ? parseFloat(acct.equity) : 0;
+      const dailyPnl = acct?.equity && acct?.last_equity
+        ? parseFloat(acct.equity) - parseFloat(acct.last_equity)
+        : 0;
       const startingEquity = STARTING_EQUITY;
       const overallReturn = currentEquity > 0
         ? ((currentEquity - startingEquity) / startingEquity) * 100
@@ -43,7 +46,7 @@ export function PerformanceCard() {
         overallReturn,
         currentEquity,
         startingEquity,
-        dailyPnl: acct?.daily_pnl ?? 0,
+        dailyPnl,
         filledTrades: tradesRes.count ?? 0,
       });
       setLoading(false);
@@ -89,7 +92,7 @@ export function PerformanceCard() {
         </p>
         <p className="text-sm text-muted-foreground">Overall Return</p>
 
-        {startingEquity > 0 && (
+        {currentEquity > 0 && (
           <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
             <span>{fmt(startingEquity)}</span>
             <span className="text-muted-foreground/40">&rarr;</span>
@@ -98,19 +101,23 @@ export function PerformanceCard() {
         )}
 
         <div className="flex items-center gap-3 mt-1 text-xs">
-          <span
-            className={cn(
-              "font-medium",
-              dailyPnl > 0
-                ? "text-green-600"
-                : dailyPnl < 0
-                  ? "text-red-500"
-                  : "text-muted-foreground"
-            )}
-          >
-            {dailySign}{fmt(dailyPnl)} today
-          </span>
-          <span className="text-muted-foreground/40">&middot;</span>
+          {currentEquity > 0 && (
+            <>
+              <span
+                className={cn(
+                  "font-medium",
+                  dailyPnl > 0
+                    ? "text-green-600"
+                    : dailyPnl < 0
+                      ? "text-red-500"
+                      : "text-muted-foreground"
+                )}
+              >
+                {dailySign}{fmt(dailyPnl)} today
+              </span>
+              <span className="text-muted-foreground/40">&middot;</span>
+            </>
+          )}
           <span className="text-muted-foreground">
             {filledTrades} trade{filledTrades !== 1 ? "s" : ""} filled
           </span>

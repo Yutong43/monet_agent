@@ -2462,12 +2462,22 @@ def discover_catalysts(
     client = TavilyClient(api_key=os.environ.get("TAVILY_API_KEY"))
     results = {}
 
+    # Map tickers to company names for better search quality
+    _names: dict[str, str] = {}
+    try:
+        for sym in symbols:
+            t = yf.Ticker(sym)
+            _names[sym] = t.info.get("shortName", sym)
+    except Exception:
+        pass
+
     for sym in symbols:
         try:
+            name = _names.get(sym, sym)
             response = client.search(
-                query=f"{sym} upcoming conference product launch investor day {current_year}",
-                topic="news",
-                max_results=3,
+                query=f"{name} ({sym}) upcoming conference investor day product launch catalyst event {current_year}",
+                topic="general",
+                max_results=5,
             )
             hits = response.get("results", [])
             if hits:

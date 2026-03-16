@@ -390,9 +390,20 @@ export function useLangGraphBridge(userId: string, authToken: string | null) {
     await streamRef.current.stop();
   }, []);
 
+  const suggestions = useMemo(
+    () => [
+      { prompt: "How is my portfolio doing today?" },
+      { prompt: "What are Monet's top ranked stocks right now?" },
+      { prompt: "What did the market do today?" },
+      { prompt: "Show me recent trades and reasoning" },
+    ],
+    [],
+  );
+
   return useExternalStoreRuntime({
     isRunning: stream.isLoading,
     messages: threadMessages,
+    suggestions,
     setMessages,
     onNew,
     onEdit,

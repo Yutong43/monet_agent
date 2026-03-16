@@ -171,6 +171,30 @@ def _load_agent_context_inner() -> str:
         if items:
             sections.append("## Recent Decisions\n" + "\n".join(items))
 
+    # --- Earnings Profiles ---
+    ep_mems = sorted(
+        [m for m in all_mem if m["key"].startswith("earnings_profile:")],
+        key=lambda m: m.get("updated_at", ""),
+        reverse=True,
+    )
+    if ep_mems:
+        ep_items = []
+        for m in ep_mems[:15]:
+            v = m["value"]
+            if isinstance(v, dict):
+                symbol = v.get("symbol", m["key"].replace("earnings_profile:", ""))
+                pattern = v.get("pattern", "?")
+                avg_surp = v.get("avg_surprise_pct", "?")
+                streak = v.get("beat_streak", 0)
+                insight = v.get("agent_insight", "")
+                short_insight = insight[:100] + "..." if len(insight) > 100 else insight
+                ep_items.append(
+                    f"- **{symbol}**: {pattern} | avg surprise {avg_surp}% | "
+                    f"streak {streak} | {short_insight}"
+                )
+        if ep_items:
+            sections.append("## Earnings Profiles\n" + "\n".join(ep_items))
+
     # --- Performance vs Benchmark ---
     try:
         from stock_agent.db import get_equity_snapshots

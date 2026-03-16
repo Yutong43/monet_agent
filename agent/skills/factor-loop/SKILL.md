@@ -85,21 +85,40 @@ This is lightweight — just reads memory already loaded in Step 0. No new tool 
 
 ### Step 3.5: Earnings Reaction (the speed edge)
 
-This is where the LLM adds real value. For stocks that reported earnings since the last run:
+This is where the LLM adds real value — qualitative earnings interpretation before analyst revisions update.
 
-**For held positions that just reported:**
-1. `internet_search("[SYMBOL] earnings results Q[X] [year]")` — get actual results
-2. Review against factor scores — did the earnings confirm or break the thesis?
-3. Decide: HOLD (results in line), SELL (thesis broken), ADD (strong beat + rising revisions)
+**Step 3.5a: Bootstrap earnings profiles for any stock without one**
+For each held position or top-10 BUY candidate that lacks an `earnings_profile:SYMBOL` in memory:
+1. Call `get_earnings_results(symbol)` — returns 4 quarters of surprise history + forward estimates
+2. Derive `pattern` from the history (systematic_underestimation, volatile, reliable_beater, declining, turnaround)
+3. Write `agent_insight` — one actionable sentence synthesizing what the pattern means for trading
+4. Save: `write_agent_memory("earnings_profile:SYMBOL", { symbol, quarters_tracked, avg_surprise_pct, beat_streak, beat_rate, pattern, guidance_reliability, key_metric, history: [{quarter, surprise_pct, thesis_impact, action, highlights: []}], agent_insight, bootstrapped_at, last_updated })`
+5. Max 3 bootstraps per run (don't burn all tokens on profiles)
 
-**For top BUY candidates that just reported:**
-1. If earnings beat + positive guidance → fast-track BUY before analyst revisions flow through
-2. This is the speed edge: act at 10am on overnight earnings, hours before estimate revision updates
+**Step 3.5b: React to new earnings**
+For stocks that reported since the last run (check `recent_surprises` from `earnings_calendar()` in Step 3):
+
+Data gathering (structured FIRST, qualitative SECOND):
+1. `get_earnings_results(symbol)` — actual_eps, estimated_eps, surprise_pct, summary stats
+2. Read existing `earnings_profile:SYMBOL` — does this result fit the pattern?
+3. `internet_search("[SYMBOL] earnings results Q[X] [year]")` — for qualitative highlights: management commentary, guidance details, strategic announcements. Extract 1-3 bullet highlights for the profile.
+
+Decision framework:
+- **Pattern continues** (e.g., reliable beater beats again): HOLD, update profile, no drama
+- **Pattern breaks** (e.g., reliable beater misses): High alert — check qualitative context, consider SELL
+- **Positive surprise + rising forward estimates**: thesis strengthened, fast-track BUY for non-held candidates
+- **This is the speed edge**: act at 10am on overnight earnings, hours before estimate revisions update
+
+After each reaction:
+- Append new quarter to `earnings_profile:SYMBOL` history (with highlights from internet_search)
+- Update stats (avg_surprise_pct, beat_streak, beat_rate)
+- Revise `agent_insight` and `pattern` if warranted
+- Write `record_decision()` with `source: earnings_reaction`
 
 **Rules:**
-- Max 1-2 earnings-driven actions per run
-- Log each as `record_decision()` with `reasoning` mentioning `source: earnings_reaction`
-- Earnings overrides can bypass the normal composite threshold if the LLM judges the results as transformative
+- Max 1-2 earnings-driven trade actions per run
+- Earnings overrides can bypass composite threshold if results are transformative
+- Profile updates (no trade action) don't count toward the limit
 
 ---
 

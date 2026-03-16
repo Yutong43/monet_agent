@@ -120,17 +120,14 @@ const ThreadSuggestions: FC = () => (
 );
 
 const ThreadSuggestionItem: FC = () => (
-  <div className="aui-thread-welcome-suggestion-display fade-in slide-in-from-bottom-2 @md:nth-[n+3]:block nth-[n+3]:hidden animate-in fill-mode-both duration-200">
+  <div className="aui-thread-welcome-suggestion-display fade-in slide-in-from-bottom-2 animate-in fill-mode-both duration-200">
     <SuggestionPrimitive.Trigger send asChild>
       <Button
         variant="ghost"
-        className="aui-thread-welcome-suggestion h-auto w-full @md:flex-col flex-wrap items-start justify-start gap-1 rounded-2xl border px-4 py-3 text-left text-sm transition-colors hover:bg-muted"
+        className="aui-thread-welcome-suggestion h-auto w-full rounded-2xl border px-4 py-3 text-left text-sm transition-colors hover:bg-muted"
       >
         <span className="aui-thread-welcome-suggestion-text-1 font-medium">
           <SuggestionPrimitive.Title />
-        </span>
-        <span className="aui-thread-welcome-suggestion-text-2 text-muted-foreground">
-          <SuggestionPrimitive.Description />
         </span>
       </Button>
     </SuggestionPrimitive.Trigger>

@@ -6,6 +6,7 @@ import { PerformanceCard, FactorSystemCard } from "@/components/trading/performa
 import { BenchmarkCard } from "@/components/trading/benchmark-card";
 import { PortfolioSummary, PositionsTable } from "@/components/trading/portfolio-card";
 import { TradeCard, TradeCardCompact } from "@/components/trading/trade-card";
+import { EarningsIntelligenceCard } from "@/components/trading/earnings-card";
 import { Card, CardContent } from "@/components/ui/card";
 
 export default function DashboardPage() {
@@ -64,7 +65,10 @@ export default function DashboardPage() {
         </>
       )}
 
-      {/* Row 3: Watchlist + Recent Trades */}
+      {/* Row 3: Earnings Intelligence */}
+      <EarningsIntelligenceCard />
+
+      {/* Row 4: Watchlist + Recent Trades */}
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="space-y-4">
           <h2 className="text-lg font-semibold">Watchlist</h2>

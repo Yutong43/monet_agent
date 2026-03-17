@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { EventCalendar } from "@/components/trading/event-calendar";
+import { SubscribeModal } from "@/components/subscription/subscribe-modal";
 
 const navItems = [
   { href: "/about", label: "About Me", icon: User },
@@ -57,6 +58,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <EventCalendar />
         </div>
         <div className="border-t p-2">
+          <SubscribeModal
+            source="app"
+            triggerLabel="Daily Recap"
+            triggerVariant="ghost"
+            triggerClassName="w-full justify-start gap-2 text-sm"
+            showIcon
+          />
           <Button variant="ghost" className="w-full justify-start gap-2 text-sm" onClick={handleSignOut}>
             <LogOut className="size-4" />
             Sign Out

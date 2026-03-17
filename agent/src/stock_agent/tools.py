@@ -1,5 +1,6 @@
 """Stock Agent tools — autonomous-mode and chat-mode."""
 
+import html
 import logging
 import os
 from datetime import datetime, timedelta
@@ -7,6 +8,7 @@ from typing import Literal
 
 import time
 
+import httpx
 import pandas as pd
 import yfinance as yf
 from alpaca.trading.requests import MarketOrderRequest, LimitOrderRequest, TakeProfitRequest, StopLossRequest
@@ -1704,6 +1706,318 @@ def send_daily_recap() -> dict:
         return {"status": "error", "error": str(e)}
 
 
+def _fmt_currency(value: float | None) -> str:
+    if value is None:
+        return "N/A"
+    return f"${value:,.0f}"
+
+
+def _fmt_pct(value: float | None) -> str:
+    if value is None:
+        return "N/A"
+    return f"{value:+.2f}%"
+
+
+def _build_subscription_email(
+    today_label: str,
+    reflection: dict | None,
+    trades: list[dict],
+    portfolio: dict | None,
+    overall_return_pct: float | None,
+    spy_return_pct: float | None,
+    alpha_pct: float | None,
+    recipient_email: str | None = None,
+) -> tuple[str, str]:
+    """Build HTML and plain-text daily recap email content.
+
+    Args:
+        today_label: Human-readable date string, e.g. "Tuesday, March 17, 2026".
+        reflection: Today's journal reflection dict (title, content) or None.
+        trades: List of today's trade dicts from the trades table.
+        portfolio: Live portfolio dict from get_portfolio(), or None.
+        overall_return_pct: Portfolio return since $100k inception (matches dashboard).
+        spy_return_pct: SPY cumulative return since inception (from equity_snapshots).
+        alpha_pct: overall_return_pct - spy_return_pct, or None if unavailable.
+        recipient_email: Subscriber email used to generate a personalized unsubscribe link.
+    """
+    import urllib.parse
+
+    reflection_body = (reflection or {}).get("content") or "No reflection entry was recorded today."
+    lines = [line.strip() for line in reflection_body.splitlines() if line.strip()]
+
+    latest_equity = portfolio.get("equity") if portfolio else None
+    daily_pnl = portfolio.get("daily_pnl") if portfolio else None
+
+    def _val_color(val: float | None) -> str:
+        """Return green/red/dark based on sign of val."""
+        if val is None:
+            return "#111827"
+        return "#16a34a" if val > 0 else ("#dc2626" if val < 0 else "#111827")
+
+    def _metric_cell(label: str, value: str, val_color: str = "#111827") -> str:
+        """Single metric card as a <td> for table-based 2x2 grid."""
+        return (
+            f"<td style='width:50%; padding:6px; vertical-align:top;'>"
+            f"<div style='border:1px solid #e5e7eb; border-radius:14px; padding:14px 16px; background:#fafaf9;'>"
+            f"<p style='margin:0; font-size:12px; color:#6b7280; text-transform:uppercase; letter-spacing:0.06em;'>"
+            f"{html.escape(label)}</p>"
+            f"<p style='margin:8px 0 0 0; font-size:22px; font-weight:700; color:{val_color};'>"
+            f"{html.escape(value)}</p>"
+            f"</div></td>"
+        )
+
+    # Trade lines — coalesce filled_avg_price → limit_price for both buys and sells
+    trade_lines = []
+    for trade in trades[:5]:
+        qty = trade.get("filled_quantity") or trade.get("quantity")
+        price = trade.get("filled_avg_price") or trade.get("limit_price")
+        price_text = f" @ ${float(price):.2f}" if price else ""
+        trade_lines.append(f"{trade.get('side', '').upper()} {qty} {trade.get('symbol', '')}{price_text}")
+
+    # ── Plain-text version ───────────────────────────────────────────────────
+    text_parts = [
+        f"Monet Daily Recap — {today_label}",
+        "",
+        f"Portfolio equity : {_fmt_currency(latest_equity)}",
+        f"Daily P&L        : {_fmt_currency(daily_pnl)}",
+        f"Return           : {_fmt_pct(overall_return_pct)}",
+        f"SPY return       : {_fmt_pct(spy_return_pct)}",
+        f"Alpha vs SPY     : {_fmt_pct(alpha_pct)}",
+        "",
+        *lines,
+    ]
+    if trade_lines:
+        text_parts.extend(["", "Today's trades:", *[f"  - {t}" for t in trade_lines]])
+    app_url = os.environ.get("NEXT_APP_URL", "https://monet.app")
+    if recipient_email:
+        unsub_url = f"{app_url}/api/unsubscribe?email={urllib.parse.quote(recipient_email)}"
+    else:
+        unsub_url = f"{app_url}/unsubscribe"
+    text_parts.extend(["", "---", f"Unsubscribe: {unsub_url}"])
+
+    # ── HTML version ─────────────────────────────────────────────────────────
+    html_paragraphs = "".join(
+        f"<p style='margin:0 0 12px 0; line-height:1.6; color:#374151;'>{html.escape(line)}</p>"
+        for line in lines
+    )
+
+    trades_html = ""
+    if trade_lines:
+        items = "".join(
+            f"<li style='margin-bottom:4px;'>{html.escape(t)}</li>" for t in trade_lines
+        )
+        trades_html = (
+            "<div style='margin-top:20px;'>"
+            "<p style='margin:0 0 8px 0; font-size:12px; font-weight:600; "
+            "text-transform:uppercase; letter-spacing:0.06em; color:#6b7280;'>Today&rsquo;s trades</p>"
+            f"<ul style='padding-left:20px; margin:0; color:#374151;'>{items}</ul>"
+            "</div>"
+        )
+
+    # Metric grid — use <table> for email client compatibility (CSS Grid is not supported)
+    metrics_html = (
+        "<table width='100%' cellpadding='0' cellspacing='0' style='border-collapse:collapse;'>"
+        "<tr>"
+        + _metric_cell("Portfolio equity", _fmt_currency(latest_equity))
+        + _metric_cell("Daily P&L", _fmt_currency(daily_pnl), _val_color(daily_pnl))
+        + "</tr><tr>"
+        + _metric_cell("Return", _fmt_pct(overall_return_pct), _val_color(overall_return_pct))
+        + _metric_cell("Alpha vs SPY", _fmt_pct(alpha_pct), _val_color(alpha_pct))
+        + "</tr></table>"
+    )
+
+    # Benchmark — always rendered; shows "—" when data is unavailable
+    spy_display = _fmt_pct(spy_return_pct) if spy_return_pct is not None else "—"
+    alpha_display = _fmt_pct(alpha_pct) if alpha_pct is not None else "—"
+    benchmark_html = (
+        "<div style='margin-top:20px; padding:16px 18px; border-radius:16px; background:#111827; color:#f9fafb;'>"
+        "<p style='margin:0 0 10px 0; font-size:12px; text-transform:uppercase; "
+        "letter-spacing:0.08em; color:#9ca3af;'>Benchmark</p>"
+        "<table width='100%' cellpadding='0' cellspacing='0'>"
+        "<tr>"
+        f"<td style='color:#9ca3af; font-size:13px;'>SPY return</td>"
+        f"<td style='text-align:right; font-size:15px; font-weight:700; color:#f9fafb;'>"
+        f"{html.escape(spy_display)}</td>"
+        "</tr><tr>"
+        f"<td style='color:#9ca3af; font-size:13px; padding-top:8px;'>Monet alpha</td>"
+        f"<td style='text-align:right; font-size:15px; font-weight:700; padding-top:8px; "
+        f"color:{_val_color(alpha_pct) if alpha_pct is not None else \"#9ca3af\"};'>"
+        f"{html.escape(alpha_display)}</td>"
+        "</tr></table>"
+        "</div>"
+    )
+
+    # Unsubscribe footer
+    unsubscribe_html = (
+        "<div style='margin-top:28px; padding-top:16px; border-top:1px solid #e5e7eb; text-align:center;'>"
+        "<p style='margin:0; font-size:12px; color:#9ca3af;'>"
+        "You&rsquo;re receiving this because you subscribed to Monet&rsquo;s daily recap.&nbsp;"
+        f"<a href='{unsub_url}' style='color:#6b7280; text-decoration:underline;'>Unsubscribe</a>"
+        "</p></div>"
+    )
+
+    html_body = (
+        "<div style='font-family:Arial,sans-serif; max-width:680px; margin:0 auto; "
+        "padding:28px 24px; color:#111827; background:#f4f1ea;'>"
+        "<div style='background:#ffffff; border:1px solid #e7e0d2; border-radius:24px; padding:28px;'>"
+        "<p style='margin:0 0 8px 0; font-size:12px; letter-spacing:0.08em; "
+        "text-transform:uppercase; color:#6b7280;'>Monet daily recap</p>"
+        f"<h1 style='margin:0 0 8px 0; font-size:28px; line-height:1.15; color:#111827;'>"
+        f"Executive summary for {html.escape(today_label)}</h1>"
+        "<p style='margin:0 0 20px 0; color:#6b7280; line-height:1.6;'>"
+        "Your end-of-day investor brief with portfolio performance, benchmark context, "
+        "and today&rsquo;s key takeaways.</p>"
+        f"{metrics_html}"
+        f"{benchmark_html}"
+        "<div style='margin-top:24px; padding-top:22px; border-top:1px solid #e5e7eb;'>"
+        "<p style='margin:0 0 12px 0; font-size:12px; text-transform:uppercase; "
+        "letter-spacing:0.08em; color:#6b7280;'>Today&rsquo;s recap</p>"
+        f"{html_paragraphs}"
+        f"{trades_html}"
+        "</div>"
+        f"{unsubscribe_html}"
+        "</div></div>"
+    )
+
+    return html_body, "\n".join(text_parts)
+
+
+def send_daily_subscription_emails() -> dict:
+    """Send the daily recap email to all active subscribers once per day."""
+    resend_api_key = os.environ.get("RESEND_API_KEY")
+    from_email = os.environ.get("DAILY_RECAP_FROM_EMAIL")
+
+    if not resend_api_key or not from_email:
+        return {
+            "status": "skipped",
+            "message": "Email delivery not configured. Set RESEND_API_KEY and DAILY_RECAP_FROM_EMAIL.",
+        }
+
+    sb = get_supabase()
+    today = datetime.now()
+    today_label = today.strftime("%A, %B %-d, %Y")
+    today_start = today.strftime("%Y-%m-%d")
+
+    try:
+        subs_result = (
+            sb.table("email_subscriptions")
+            .select("id, email, last_sent_at")
+            .eq("status", "active")
+            .execute()
+        )
+        subscriptions = subs_result.data or []
+        due_subscriptions = []
+        for subscription in subscriptions:
+            last_sent_at = subscription.get("last_sent_at")
+            if not last_sent_at or str(last_sent_at)[:10] < today_start:
+                due_subscriptions.append(subscription)
+
+        if not due_subscriptions:
+            return {"status": "ok", "sent": 0, "message": "No subscribers due for delivery."}
+
+        reflection_result = (
+            sb.table("agent_journal")
+            .select("title, content, created_at")
+            .eq("entry_type", "reflection")
+            .gte("created_at", f"{today_start}T00:00:00")
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        reflection = reflection_result.data[0] if reflection_result.data else None
+
+        trades_result = (
+            sb.table("trades")
+            .select("symbol, side, quantity, filled_quantity, filled_avg_price, limit_price, created_at")
+            .gte("created_at", f"{today_start}T00:00:00")
+            .order("created_at", desc=True)
+            .limit(5)
+            .execute()
+        )
+        trades = trades_result.data or []
+
+        try:
+            portfolio = get_portfolio()
+        except Exception:
+            logger.warning("Failed to load live portfolio for subscription email.")
+            portfolio = None
+
+        perf_result = get_performance_comparison(days=30)
+        performance = None if perf_result.get("error") else perf_result
+
+        # ── Compute metrics aligned with dashboard calculations ────────────────
+        # Dashboard (PerformanceCard + BenchmarkCard) uses a hardcoded $100k
+        # starting equity and live Alpaca equity, so we replicate that here.
+        _STARTING_EQUITY = 100_000
+        current_equity = portfolio.get("equity") if portfolio else None
+        overall_return_pct: float | None = (
+            round(((current_equity - _STARTING_EQUITY) / _STARTING_EQUITY) * 100, 2)
+            if current_equity
+            else None
+        )
+        # SPY return comes from equity_snapshots (inception-to-date).
+        spy_return_pct: float | None = (
+            performance.get("cumulative_spy_return") if performance else None
+        )
+        # Alpha: live portfolio return minus SPY (don't rely on stored alpha
+        # which is NULL when deployed_pct ≤ 50% — dashboard always computes it).
+        alpha_pct: float | None = (
+            round(overall_return_pct - spy_return_pct, 2)
+            if (overall_return_pct is not None and spy_return_pct is not None)
+            else None
+        )
+
+        subject = f"Monet Daily Recap - {today_label}"
+        sent_ids: list[str] = []
+
+        with httpx.Client(timeout=20.0) as client:
+            for subscription in due_subscriptions:
+                # Build per-subscriber HTML so the unsubscribe link is personalised.
+                html_body, text_body = _build_subscription_email(
+                    today_label,
+                    reflection,
+                    trades,
+                    portfolio,
+                    overall_return_pct,
+                    spy_return_pct,
+                    alpha_pct,
+                    recipient_email=subscription["email"],
+                )
+                response = client.post(
+                    "https://api.resend.com/emails",
+                    headers={
+                        "Authorization": f"Bearer {resend_api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "from": from_email,
+                        "to": [subscription["email"]],
+                        "subject": subject,
+                        "html": html_body,
+                        "text": text_body,
+                    },
+                )
+                response.raise_for_status()
+                sent_ids.append(subscription["id"])
+
+        if sent_ids:
+            (
+                sb.table("email_subscriptions")
+                .update({"last_sent_at": datetime.now().isoformat()})
+                .in_("id", sent_ids)
+                .execute()
+            )
+
+        return {
+            "status": "ok",
+            "sent": len(sent_ids),
+            "message": f"Sent daily recap email to {len(sent_ids)} subscribers.",
+        }
+    except Exception as e:
+        logger.error("Failed to send daily subscription emails: %s", e)
+        return {"status": "error", "error": str(e)}
+
+
 # ============================================================
 # Bracket / Position Protection tools
 # ============================================================
@@ -2707,6 +3021,7 @@ AUTONOMOUS_TOOLS = [
     check_trade_risk,
     query_database,
     send_daily_recap,
+    send_daily_subscription_emails,
     update_market_regime,
     update_stock_analysis,
     record_decision,

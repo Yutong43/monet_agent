@@ -799,8 +799,8 @@ export default function EarningsDetailPage({
   if (loading) {
     return (
       <div className="h-full overflow-y-auto p-6 space-y-6">
-        <Link href="/dashboard" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="size-4" /> Back to Dashboard
+        <Link href="/stocks" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+          <ArrowLeft className="size-4" /> Back to Stocks
         </Link>
         <div className="flex items-center gap-4">
           <Skeleton className="size-12 rounded-lg" />
@@ -829,8 +829,8 @@ export default function EarningsDetailPage({
   return (
     <div className="h-full overflow-y-auto p-6 space-y-6">
       {/* Back link */}
-      <Link href="/dashboard" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-        <ArrowLeft className="size-4" /> Back to Dashboard
+      <Link href="/stocks" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+        <ArrowLeft className="size-4" /> Back to Stocks
       </Link>
 
       {!hasAnyData ? (

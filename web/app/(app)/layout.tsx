@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { BarChart3, Bot, BookOpen, Activity, LogOut, User } from "lucide-react";
+import { BarChart3, Bot, BookOpen, Activity, LogOut, User, Library } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -11,6 +11,7 @@ import { EventCalendar } from "@/components/trading/event-calendar";
 const navItems = [
   { href: "/about", label: "About Me", icon: User },
   { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
+  { href: "/stocks", label: "Stocks", icon: Library },
   { href: "/chat", label: "Chat", icon: Bot },
   { href: "/journal", label: "Journal", icon: BookOpen },
   { href: "/activity", label: "Activity", icon: Activity },

@@ -99,6 +99,30 @@ Verify agent calls it autonomously on Mar 21.
 - [ ] `deployed_pct` column populated in equity_snapshots
 - [ ] Alpha is reasonable (not -22% from cash drag)
 
+### Earnings Profile Bootstrap for New Positions (next 1-2 runs)
+**Trigger**: MU, NVDA, CRUS added Mar 16-17; profiles bootstrap at max 3/run in Step 3.5a.
+- [ ] `earnings_profile:MU` created (should be first — highest rank #1)
+- [ ] `earnings_profile:NVDA` created
+- [ ] `earnings_profile:CRUS` created
+- [ ] All 8 positions have matching earnings profiles (currently 5/8: WDC, TSM, STX, LRCX, AMAT)
+- [ ] New profiles appear in Earnings Intelligence card on dashboard
+
+### Earnings Guard Hardening (next factor loop buying near earnings)
+**Trigger**: After deploying yfinance fallback + hard block in risk.py.
+- [ ] `earnings_calendar()` returns MU earnings date via yfinance fallback (Finnhub missed it)
+- [ ] `upcoming_earnings` memory key includes MU after next run
+- [ ] MU earnings appear on calendar UI (orange dot on March 18)
+- [ ] Risk check hard-blocks any buy within 2 days of earnings (`approved: false`)
+- [ ] 3-5 day earnings proximity shows as warning (not block)
+
+### Catalyst Intelligence in Factor Loop (next weekday run)
+**Trigger**: After deploying Step 3.25 rewrite + memory loader fix.
+- [ ] Agent searches for active catalysts (GTC, conferences) via `internet_search()`
+- [ ] Journal includes "## Catalyst Watch" section when catalysts are active
+- [ ] Catalyst assessment covers all affected holdings (not just primary symbol)
+- [ ] Catalysts do NOT override factor scores or generate trades on their own
+- [ ] Medium-significance catalysts within 7 days appear in agent context
+
 ### Catalyst Guard in Factor Loop (Monday Mar 16 or later)
 **Trigger**: First weekday factor loop with `upcoming_catalysts` memory populated.
 - [ ] Step 3.25 reads catalyst memory and logs any guard actions

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { SetupChat } from "@/components/landing/setup-chat";
+import { SubscribeModal } from "@/components/subscription/subscribe-modal";
 
 export default async function LandingPage() {
   const supabase = await createClient();
@@ -17,6 +18,13 @@ export default async function LandingPage() {
       <nav className="flex items-center justify-between px-6 py-4 max-w-5xl mx-auto">
         <span className="text-lg font-bold tracking-tight">Monet</span>
         <div className="flex items-center gap-3">
+          <SubscribeModal
+            source="landing"
+            triggerLabel="Daily Recap"
+            triggerVariant="ghost"
+            triggerSize="sm"
+            triggerClassName="text-sm text-muted-foreground hover:text-foreground"
+          />
           <Link
             href="/login"
             className="text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -62,6 +70,13 @@ export default async function LandingPage() {
               >
                 Learn More
               </Link>
+              <SubscribeModal
+                source="landing"
+                triggerLabel="Get Daily Recap"
+                triggerVariant="outline"
+                triggerSize="lg"
+                triggerClassName="rounded-full px-6"
+              />
             </div>
           </div>
           <div className="flex justify-center">

@@ -84,10 +84,14 @@ Create a journal entry of type "reflection". Keep it **tight — data table + bu
 - Tomorrow's focus: 1-2 bullets
 - Set `run_source='eod_reflection'`
 
+**HARD LIMIT: 2500 characters max.** Count your characters before writing. If over the limit, cut the factor observations and tomorrow's focus sections first.
+
 **Do NOT include**: self-assessment grades, lessons learned, strategic proposals, "what went well / what could improve", bull/bear scenario planning, or verbose commentary. Save that for the weekly review.
 
 ### 10. Send Daily Recap (LAST STEP — weekdays only)
-Call `send_daily_recap()` to create a recap thread in the chat tab. This gives the user a summary without digging through journal entries. Do NOT skip this step.
+Call `send_daily_recap()` to create a recap thread in the chat tab. This gives the user a summary without digging through journal entries.
+
+Then call `send_daily_subscription_emails()` to email the same day's summary to active subscribers. If email delivery is not configured, note that and move on. Do NOT skip this step.
 
 ## Reflection Principles
 - Be honest about mistakes — don't rationalize bad trades

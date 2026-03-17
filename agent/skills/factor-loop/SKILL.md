@@ -198,10 +198,12 @@ write_agent_memory("factor_rankings", {
 
 ### Write journal entry
 Type: "market_scan" or "trade"
+- **HARD LIMIT: 3000 characters max** — trim ruthlessly before writing. If your draft exceeds this, cut it.
 - **MAX 400 words** — this is a factor log, not an essay
 - Include: top 10 rankings table, signals generated, actions taken, regime summary
 - **If active catalysts from Step 3.25**: add a "## Catalyst Watch" section (2-4 sentences) summarizing what happened, how it affects holdings, and whether it changes any thesis. This is where readers see that you're tracking real-world events, not just numbers.
 - Do NOT write "Key Findings", "Insights", strategic commentary, or grades — just the data
+- Do NOT repeat the full rankings table if one was written in the same day — a compact summary of changes is sufficient
 - Set `run_source="factor_loop"` (or `"factor_loop_weekend"` on Saturday)
 
 ---

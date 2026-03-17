@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { SetupChat } from "@/components/landing/setup-chat";
 import { SubscribeModal } from "@/components/subscription/subscribe-modal";
+import { PerformanceWidget } from "@/components/landing/performance-widget";
 
 export default async function LandingPage() {
   const supabase = await createClient();
@@ -53,9 +54,8 @@ export default async function LandingPage() {
               Quant Agent
             </h1>
             <p className="mt-6 text-lg text-muted-foreground leading-relaxed">
-              Tell OpenClaw what you care about. In 2 minutes, you&apos;ll have a
-              personalized quant agent scoring 900 stocks and trading with
-              systematic discipline.
+              A systematic, factor-based agent that scores 900 stocks, executes
+              trades with discipline, and never panics.
             </p>
             <div className="mt-8 flex items-center gap-4">
               <Link
@@ -64,23 +64,52 @@ export default async function LandingPage() {
               >
                 Get Started — Free
               </Link>
-              <Link
-                href="/about"
-                className="rounded-full border px-6 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
-              >
-                Learn More
-              </Link>
               <SubscribeModal
                 source="landing"
                 triggerLabel="Get Daily Recap"
                 triggerVariant="outline"
                 triggerSize="lg"
                 triggerClassName="rounded-full px-6"
+                autoOpenAfterMs={3000}
               />
             </div>
           </div>
-          <div className="flex justify-center">
-            <SetupChat />
+          <div>
+            <PerformanceWidget />
+          </div>
+        </div>
+      </section>
+
+      {/* OpenClaw setup */}
+      <section className="border-y bg-muted/30">
+        <div className="max-w-5xl mx-auto px-6 py-20">
+          <div className="grid md:grid-cols-2 gap-12 items-center">
+            <div>
+              <p className="text-sm font-medium text-muted-foreground mb-3 tracking-wider uppercase">
+                Personalized Setup
+              </p>
+              <h2 className="text-3xl font-bold tracking-tight leading-snug">
+                Your agent,
+                <br />
+                configured in 2 minutes
+              </h2>
+              <p className="mt-4 text-muted-foreground leading-relaxed">
+                Tell OpenClaw your sectors, risk tolerance, and experience level.
+                It sets factor weights, builds your universe, and deploys your
+                agent — no forms, no dashboards, just a conversation.
+              </p>
+              <ul className="mt-6 space-y-2 text-sm text-muted-foreground">
+                {["Sector focus & factor weights", "Risk tolerance & position sizing", "Weekly self-optimization"].map((item) => (
+                  <li key={item} className="flex items-center gap-2">
+                    <span className="text-emerald-500 font-bold">✓</span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="flex justify-center">
+              <SetupChat />
+            </div>
           </div>
         </div>
       </section>

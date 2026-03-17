@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Mail, TrendingUp, BookOpen, ArrowRightLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -21,6 +21,8 @@ type SubscribeModalProps = {
   triggerVariant?: "default" | "ghost" | "link" | "outline";
   triggerSize?: "default" | "sm" | "lg";
   showIcon?: boolean;
+  /** If set, auto-opens the modal after this many ms on first visit (uses localStorage to fire only once). */
+  autoOpenAfterMs?: number;
 };
 
 const WHAT_YOU_GET = [
@@ -38,6 +40,8 @@ const WHAT_YOU_GET = [
   },
 ];
 
+const POPUP_KEY = "monet_recap_popup_shown";
+
 export function SubscribeModal({
   source,
   triggerLabel = "Daily Recap",
@@ -45,8 +49,19 @@ export function SubscribeModal({
   triggerVariant = "ghost",
   triggerSize = "default",
   showIcon = true,
+  autoOpenAfterMs,
 }: SubscribeModalProps) {
   const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!autoOpenAfterMs) return;
+    if (localStorage.getItem(POPUP_KEY)) return;
+    const timer = setTimeout(() => {
+      setOpen(true);
+      localStorage.setItem(POPUP_KEY, "1");
+    }, autoOpenAfterMs);
+    return () => clearTimeout(timer);
+  }, [autoOpenAfterMs]);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>

@@ -81,35 +81,19 @@ export default async function LandingPage() {
       </section>
 
       {/* How it works */}
-      <section className="max-w-4xl mx-auto px-6 pb-20">
-        <div className="grid gap-6 sm:grid-cols-3">
-          <div className="rounded-2xl border p-6 space-y-3">
-            <div className="text-2xl">01</div>
-            <h3 className="font-semibold">Talk to OpenClaw</h3>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              Tell OpenClaw your sectors, risk tolerance, and experience level.
-              It configures everything — no forms, no dashboards, just a
-              conversation.
-            </p>
-          </div>
-          <div className="rounded-2xl border p-6 space-y-3">
-            <div className="text-2xl">02</div>
-            <h3 className="font-semibold">Get Your Own Agent</h3>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              In under 2 minutes, you get a dedicated quant agent that scores
-              900 stocks on four factors, executes trades, and manages risk —
-              all personalized to you.
-            </p>
-          </div>
-          <div className="rounded-2xl border p-6 space-y-3">
-            <div className="text-2xl">03</div>
-            <h3 className="font-semibold">Customize Anytime</h3>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              Chat with your agent to adjust strategy, shift sector focus, or
-              tune risk. It learns your preferences and improves its factor
-              weights weekly.
-            </p>
-          </div>
+      <section className="max-w-4xl mx-auto px-6 py-16">
+        <div className="grid gap-8 sm:grid-cols-3">
+          {[
+            { n: "01", title: "Talk to OpenClaw", desc: "Tell OpenClaw your sectors, risk tolerance, and experience level. It configures everything — no forms, no dashboards, just a conversation." },
+            { n: "02", title: "Get Your Own Agent", desc: "In under 2 minutes you get a dedicated quant agent that scores 900 stocks on four factors, executes trades, and manages risk." },
+            { n: "03", title: "Customize Anytime", desc: "Chat with your agent to adjust strategy, shift sector focus, or tune risk. It improves its factor weights weekly." },
+          ].map(({ n, title, desc }) => (
+            <div key={n} className="pt-5 border-t space-y-2">
+              <p className="text-xs font-semibold text-muted-foreground/50 tabular-nums">{n}</p>
+              <h3 className="font-semibold">{title}</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">{desc}</p>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -148,7 +132,7 @@ export default async function LandingPage() {
       </section>
 
       {/* Edge */}
-      <section className="max-w-4xl mx-auto px-6 pb-20">
+      <section className="max-w-4xl mx-auto px-6 py-16">
         <h2 className="text-2xl font-bold text-center mb-10">
           Why Your Own AI Agent Beats DIY Investing
         </h2>
@@ -187,7 +171,7 @@ export default async function LandingPage() {
       </section>
 
       {/* Factors */}
-      <section className="max-w-3xl mx-auto px-6 pb-20">
+      <section className="max-w-3xl mx-auto px-6 py-16">
         <h2 className="text-2xl font-bold text-center mb-2">
           Four-Factor Composite Model
         </h2>

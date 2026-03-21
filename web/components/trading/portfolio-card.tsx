@@ -13,25 +13,45 @@ interface Position {
   avg_entry_price: number;
 }
 
-interface PortfolioData {
-  equity: number;
+interface PortfolioAccount {
+  equity: number;       // total account value (positions + cash)
   cash: number;
   buying_power: number;
-  portfolio_value: number;
+  portfolio_value: number; // positions market value only
   daily_pnl: number;
+}
+
+interface PortfolioData {
+  account: PortfolioAccount;
   positions: Position[];
 }
 
+const STARTING_EQUITY = 100_000;
+
 export function PortfolioSummary({ data }: { data: PortfolioData }) {
+  const { account, positions } = data;
+  const unrealizedPl = positions.reduce((sum, p) => sum + p.unrealized_pl, 0);
+  const totalPl = account.equity - STARTING_EQUITY;
+  const realizedPl = totalPl - unrealizedPl;
+
   return (
-    <div className="grid gap-4 md:grid-cols-4">
-      <StatCard label="Portfolio Value" value={fmt(data.portfolio_value)} />
-      <StatCard label="Cash" value={fmt(data.cash)} />
-      <StatCard label="Buying Power" value={fmt(data.buying_power)} />
+    <div className="grid gap-4 md:grid-cols-5">
+      <StatCard label="Portfolio Value" value={fmt(account.equity)} />
+      <StatCard label="Cash" value={fmt(account.cash)} />
+      <StatCard
+        label="Unrealized P&L"
+        value={fmt(unrealizedPl)}
+        className={unrealizedPl >= 0 ? "text-green-600" : "text-red-500"}
+      />
+      <StatCard
+        label="Realized P&L"
+        value={fmt(realizedPl)}
+        className={realizedPl >= 0 ? "text-green-600" : "text-red-500"}
+      />
       <StatCard
         label="Daily P&L"
-        value={fmt(data.daily_pnl)}
-        className={data.daily_pnl >= 0 ? "text-green-600" : "text-red-500"}
+        value={fmt(account.daily_pnl)}
+        className={account.daily_pnl >= 0 ? "text-green-600" : "text-red-500"}
       />
     </div>
   );

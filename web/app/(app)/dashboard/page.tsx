@@ -62,7 +62,7 @@ export default function DashboardPage() {
       {/* Row 2: Portfolio Summary */}
       {portfolio && (
         <>
-          <PortfolioSummary data={portfolio.account} />
+          <PortfolioSummary data={portfolio} />
           <PositionsTable positions={portfolio.positions} />
         </>
       )}

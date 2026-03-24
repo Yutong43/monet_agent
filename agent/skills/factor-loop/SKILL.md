@@ -8,7 +8,7 @@ You are running the **factor-based trading loop** — a systematic, quantitative
 
 ## Step 0: Load Context (ALWAYS DO THIS FIRST)
 
-1. **Run `reconcile_positions()` FIRST** — this detects any bracket stop-loss or take-profit fills that Alpaca executed since the last run. If it finds exits, it records them in the trades table and writes a journal entry. This ensures the rest of the loop operates on an accurate view of what we actually hold.
+1. **Run `reconcile_positions()` FIRST** — this detects any bracket stop-loss or take-profit fills that Alpaca executed since the last run. If it finds exits, it records them in the trades table and writes a journal entry. For stop-loss exits, it also saves a `stopped:{SYMBOL}` memory with exit context (price, regime). These symbols will be filtered from BUY signals in Step 2c unless conditions have meaningfully changed (price dropped 1 ATR, regime improved, or new earnings data). This ensures the rest of the loop operates on an accurate view of what we actually hold.
 2. Run `read_all_agent_memory()` to load all persistent beliefs
 3. Read your last 3 journal entries:
    ```sql
@@ -35,6 +35,12 @@ You are running the **factor-based trading loop** — a systematic, quantitative
 **VIX regime adjustment**: If VIX > 30:
 - Increase cash buffer from 20% to 30%
 - Note this for Step 4 — the generate_factor_rankings tool will use 8 max positions but you should limit to 6
+
+**Regime risk gate (enforced in code)**: `check_risk()` enforces regime limits on buys automatically:
+- VIX > 26 AND breadth < 30%: ALL new buys rejected (hard block — reason: "REGIME GATE")
+- VIX 25-26 OR breadth 30-50%: Max position size reduced from 10% to 7%
+- VIX < 25 AND breadth > 50%: Normal operation
+You do NOT need to manually skip buys based on regime — the risk check handles it.
 
 ---
 
@@ -166,6 +172,11 @@ For each BUY signal (after removing earnings-blocked ones):
      - Score 60-70 → Limit 3% below current
    - Stop loss: 5% below entry
    - Take profit: 15% above entry (or use sector-appropriate target)
+
+**Automatic filters in `generate_factor_rankings()`:**
+- Stocks with EPS revision < 30 are excluded from BUY signals (would trigger immediate SELL)
+- Recently stopped-out stocks are excluded unless price/regime/catalyst has materially changed
+- If a signal shows "ENTRY BLOCKED" or "RE-ENTRY BLOCKED", record it as a WAIT decision with the reason
 
 ### Position Management
 For each HOLD signal, run `position_health_check(symbol)`:

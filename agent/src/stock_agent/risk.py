@@ -22,6 +22,14 @@ def check_risk(symbol: str, side: str, quantity: float, limit_price: float | Non
     if equity <= 0:
         return {"approved": False, "reason": "Account equity is zero or negative"}
 
+    # Check 0: Regime gate (buys only)
+    if side == "buy":
+        regime_gate = _check_regime_gate()
+        if regime_gate["blocked"]:
+            return {"approved": False, "reason": regime_gate["reason"]}
+        if regime_gate.get("reduced_position_pct"):
+            settings = {**settings, "max_position_pct": regime_gate["reduced_position_pct"]}
+
     # Get current price
     quote = get_quote(symbol)
     price = limit_price or quote["ask_price"]
@@ -151,9 +159,16 @@ def check_risk(symbol: str, side: str, quantity: float, limit_price: float | Non
             elif days_until_earnings <= 5:
                 earnings_warning = f"{symbol} reports earnings in {days_until_earnings} day(s) on {earnings_date_str}. Pre-earnings caution advised."
 
+    # Collect regime warning for approved buys
+    regime_warning = None
+    if side == "buy":
+        regime_info = _check_regime_gate()
+        regime_warning = regime_info.get("warning")
+
     return {
         "approved": True,
         "earnings_warning": earnings_warning,
+        "regime_warning": regime_warning,
         "metrics": {
             "trade_value": trade_value,
             "position_pct": (existing_position_value + trade_value) / equity * 100 if side == "buy" else 0,
@@ -162,3 +177,51 @@ def check_risk(symbol: str, side: str, quantity: float, limit_price: float | Non
             "cash_remaining": cash - (trade_value if side == "buy" else 0),
         },
     }
+
+
+def _check_regime_gate() -> dict:
+    """Check market regime and return gating decision for buys.
+
+    Returns:
+        Dict with 'blocked' bool, optional 'reason', optional 'reduced_position_pct'
+        and 'warning'.
+    """
+    try:
+        from stock_agent.db import read_memory
+
+        regime_data = read_memory("market_regime")
+        if not regime_data or not regime_data.get("value"):
+            return {"blocked": False}  # No data — fail open
+
+        rv = regime_data["value"]
+        vix = rv.get("vix")
+        breadth = rv.get("breadth_pct")
+
+        if vix is None or breadth is None:
+            return {"blocked": False}
+
+        # Hard block: VIX > 26 AND breadth < 30%
+        if vix > 26 and breadth < 30:
+            return {
+                "blocked": True,
+                "reason": (
+                    f"REGIME GATE: Risk-off regime (VIX {vix}, breadth {breadth}%). "
+                    "New buys paused until conditions improve."
+                ),
+            }
+
+        # Caution: VIX 25-26 OR breadth 30-50% — reduce position size
+        if vix >= 25 or breadth <= 50:
+            return {
+                "blocked": False,
+                "reduced_position_pct": 7,
+                "warning": (
+                    f"Elevated regime (VIX {vix}, breadth {breadth}%). "
+                    "Max position reduced to 7%."
+                ),
+            }
+
+        # Normal
+        return {"blocked": False}
+    except Exception:
+        return {"blocked": False}  # Fail open

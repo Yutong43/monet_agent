@@ -1091,6 +1091,15 @@ def place_order(
         "status": str(order.status),
     })
 
+    # Clear re-entry guard if this was a stopped symbol
+    if side == "buy":
+        try:
+            from stock_agent.db import delete_memory
+
+            delete_memory(f"stopped:{symbol}")
+        except Exception:
+            pass
+
     # Poll for fill (up to 10s for market orders, skip for limit)
     filled_avg_price = None
     filled_qty = None
@@ -1700,6 +1709,24 @@ def reconcile_positions() -> dict:
                     "pnl": round(pnl, 2) if pnl is not None else None,
                     "alpaca_order_id": str(fill_order.id),
                 })
+
+                # Save exit context for re-entry guard (stop-losses only)
+                if exit_type == "stop_loss":
+                    regime_data = read_memory("market_regime")
+                    regime_snapshot = {}
+                    if regime_data and regime_data.get("value"):
+                        rv = regime_data["value"]
+                        regime_snapshot = {
+                            "vix": rv.get("vix"),
+                            "breadth_pct": rv.get("breadth_pct"),
+                        }
+                    db_write_memory(f"stopped:{sym}", {
+                        "symbol": sym,
+                        "exit_price": fill_price,
+                        "entry_price": entry_price,
+                        "exit_date": datetime.now().strftime("%Y-%m-%d"),
+                        "regime_at_exit": regime_snapshot,
+                    })
             else:
                 errors.append({
                     "symbol": sym,
@@ -3036,6 +3063,85 @@ def enrich_eps_revisions(symbols: list[str]) -> dict:
     return {"enriched": enriched, "count": len(enriched)}
 
 
+def _check_reentry_delta(symbol: str, stopped_data: dict) -> str | None:
+    """Check if conditions have changed enough to allow re-entry after a stop-loss.
+
+    Returns a reason string if re-entry should be BLOCKED, or None if a delta is met.
+    Requires at least ONE of: price drop (1 ATR below stop), regime improvement
+    (VIX -2 or breadth +10pp), or new earnings data since exit.
+    """
+    exit_price = stopped_data.get("exit_price", 0)
+    regime_at_exit = stopped_data.get("regime_at_exit", {})
+    exit_date_str = stopped_data.get("exit_date", "")
+
+    # Staleness escape: if exit was >30 days ago, allow re-entry
+    if exit_date_str:
+        try:
+            exit_date = datetime.strptime(exit_date_str, "%Y-%m-%d")
+            if (datetime.now() - exit_date).days > 30:
+                return None
+        except ValueError:
+            pass
+
+    deltas_checked = []
+
+    # Delta 1: Price — current price >= 1 ATR below the stop price
+    try:
+        df = get_historical_bars(symbol, days=30)
+        if df is not None and len(df) >= 14:
+            from stock_agent.technical import compute_indicators
+
+            indicators = compute_indicators(df)
+            atr = indicators.get("atr", 0)
+            current_price = float(df["close"].iloc[-1])
+
+            if atr > 0 and exit_price > 0:
+                if current_price <= exit_price - atr:
+                    return None  # Price delta met
+                deltas_checked.append(
+                    f"Price ${current_price:.2f} not 1 ATR (${atr:.2f}) below stop ${exit_price:.2f}"
+                )
+    except Exception:
+        deltas_checked.append("Could not compute price delta")
+
+    # Delta 2: Regime improvement — VIX down 2+ or breadth up 10+
+    try:
+        current_regime = read_memory("market_regime")
+        if current_regime and current_regime.get("value") and regime_at_exit:
+            cr = current_regime["value"]
+            exit_vix = regime_at_exit.get("vix")
+            exit_breadth = regime_at_exit.get("breadth_pct")
+            current_vix = cr.get("vix")
+            current_breadth = cr.get("breadth_pct")
+
+            if exit_vix is not None and current_vix is not None:
+                if current_vix <= exit_vix - 2:
+                    return None  # VIX improved
+            if exit_breadth is not None and current_breadth is not None:
+                if current_breadth >= exit_breadth + 10:
+                    return None  # Breadth improved
+            deltas_checked.append(
+                f"Regime unchanged (VIX {current_vix} vs {exit_vix} at exit, "
+                f"breadth {current_breadth}% vs {exit_breadth}%)"
+            )
+    except Exception:
+        deltas_checked.append("Could not compute regime delta")
+
+    # Delta 3: New earnings reaction since exit
+    try:
+        er_mem = read_memory(f"earnings_reaction:{symbol}")
+        if er_mem and er_mem.get("value"):
+            reaction_date = er_mem["value"].get("date", "")
+            if reaction_date > exit_date_str:
+                return None  # New earnings data since exit
+        deltas_checked.append("No new earnings reaction since exit")
+    except Exception:
+        deltas_checked.append("Could not check earnings delta")
+
+    # No delta met — block re-entry
+    return "No meaningful change: " + "; ".join(deltas_checked)
+
+
 def generate_factor_rankings(
     universe_scores: list[dict],
     eps_enrichment: list[dict],
@@ -3126,6 +3232,29 @@ def generate_factor_rankings(
         else:
             # Not held — potential buy
             if rank <= 20 and composite > 70:
+                # Entry quality floor: don't buy what we'd immediately sell
+                if eps_rev < 30:
+                    hold_signals.append({
+                        **stock,
+                        "signal": "HOLD",
+                        "reason": f"ENTRY BLOCKED: EPS revision {eps_rev} < 30 (would trigger immediate SELL)",
+                    })
+                    continue
+
+                # Re-entry guard: check if recently stopped out
+                stopped_mem = read_memory(f"stopped:{sym}")
+                if stopped_mem and stopped_mem.get("value"):
+                    sv = stopped_mem["value"]
+                    block_reason = _check_reentry_delta(sym, sv)
+                    if block_reason:
+                        exit_date = sv.get("exit_date", "unknown")
+                        hold_signals.append({
+                            **stock,
+                            "signal": "HOLD",
+                            "reason": f"RE-ENTRY BLOCKED: stopped out on {exit_date}. {block_reason}",
+                        })
+                        continue
+
                 buy_signals.append({
                     **stock,
                     "signal": "BUY",

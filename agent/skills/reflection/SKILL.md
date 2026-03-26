@@ -1,8 +1,8 @@
 # Reflection Phase (Standalone EOD)
 
-You are conducting the **end-of-day reflection**. This is a lightweight review of today's activity — no research, no trading.
+You are conducting the **end-of-day reflection**. This is a review of today's activity AND an opportunity to adapt — tighten protective brackets, cancel stale orders, update beliefs. No new research or new entries, but actively manage existing positions.
 
-**Tone: Be concise and data-driven.** No self-grading (no letter grades), no "lessons learned" sections, no strategic proposals or multi-paragraph commentary. State the facts, note observations for weekly review, move on. The reflection journal entry should be a factor log, not an essay.
+**Tone: Be concise and data-driven.** No self-grading (no letter grades), no "lessons learned" sections, no strategic proposals or multi-paragraph commentary. State the facts, take action where warranted, move on.
 
 ## Step 0: Load Context (ALWAYS DO THIS FIRST)
 
@@ -41,11 +41,26 @@ Call `record_daily_snapshot()` to log today's portfolio equity and SPY close. Th
 - Compare the decision reasoning to what actually happened
 - Note: intraday P&L on same-day trades is noisy — focus on whether the setup was sound
 
-### 3b. Position Protection Check
-For each held position, run `position_health_check(symbol)`:
-- If `protected: false` → attach a stop-loss immediately via `attach_bracket_to_position()`
-- If position is up 15%+ → tighten stop to breakeven or higher (trailing stop)
-- If position approaching target_exit → consider trimming 50%
+### 3b. Position Protection & Bracket Management (TAKE ACTION)
+For each held position, run `position_health_check(symbol)`. It returns `peak_pnl_pct` (highest P&L since entry) and `drawdown_from_peak_pct` (how far current price is below the peak).
+
+**Protection check:**
+- If `protected: false` → `attach_bracket_to_position()` immediately
+
+**Bracket tightening — act on these, don't just note them:**
+
+Review the peak P&L and drawdown for each position. If a position has run up and is now giving back gains, tighten the bracket to lock in profits. To tighten: cancel the existing protective order first (`cancel_order`), then `attach_bracket_to_position()` with the new levels.
+
+| Condition | Action | New Stop | New TP |
+|-----------|--------|----------|--------|
+| Peak ≥10%, drawdown from peak ≥5% | **Tighten now** | Entry price (breakeven) | Keep current TP |
+| Peak ≥12%, drawdown from peak ≥5% | **Tighten now** | +5% above entry | Lower TP to +12% |
+| Peak ≥5% AND VIX >26 | **Tighten now** | Entry price (breakeven) | Keep current TP |
+| Peak <5% or drawdown <3% | No action | — | — |
+
+**This is not optional.** If a position meets the criteria, tighten the bracket. Log each adjustment in the journal: "Tightened AMAT stop from $320 → $338 (breakeven) after peak +12.4%, now +8.9%, drawdown -3.1%."
+
+**Why this matters:** Positions like STX (+11.9% peak → +4.9% now, -6.2% drawdown) and WDC (+9.6% peak → +2.2% now, -6.8% drawdown) are giving back the majority of their gains. Without tightening, they oscillate until the stop-loss hits at -5% and all gains are lost.
 
 ### 4. Factor Performance Evaluation
 - For each trade today: note composite score, fill price, and current P&L in a single line

@@ -18,6 +18,18 @@ You are conducting the **end-of-day wrap-up**. This is a lightweight step: recor
 
 Call `record_daily_snapshot()` to log today's portfolio equity and SPY close. This builds the performance-vs-benchmark history. Do NOT skip this.
 
+## Step 2.5: Live vs Backtest Divergence Check
+
+Call `check_live_vs_backtest_divergence()`. Lightweight read from `equity_snapshots` + latest `backtest_runs` — no network. Returns one of:
+
+- `aligned` → no note needed, skip
+- `moderate_underperformance` / `moderate_outperformance` → one-line note in Step 6 reflection (factor observations)
+- `major_underperformance` → **flag in journal, mention in Tomorrow's Focus** — possibly run `audit_factor_ic()` out of cycle if this persists for 2+ weeks
+- `major_outperformance` → one-line note, don't adjust anything (lucky streak ≠ skill)
+- `insufficient_data` / `no_backtest` → skip silently
+
+The goal is to notice regime changes before they compound. Most days will be `aligned` and generate no note.
+
 ## Step 3: Review User Insights
 
 ```sql

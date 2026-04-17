@@ -45,33 +45,52 @@ This is the most important part of the weekly review.
 - How many stocks entered/exited the top 20?
 - High turnover might indicate momentum regime shift
 
-### 3. Factor Weight Optimization
-Based on the evaluation above, consider adjusting factor weights:
+### 3. Factor Weight Optimization (IC-driven, with override)
 
-Current weights (from `factor_weights` memory):
-- Momentum: 0.35
-- Quality: 0.30
-- Value: 0.20
-- EPS Revision: 0.15
+**This step runs AFTER Step 8 (audit_factor_ic) so the IC data is fresh.** If you're doing Step 3 before Step 8, skip Step 3 and come back after the audit.
 
-**Adjustment rules:**
-- Only change weights by ±0.05 per week — no dramatic shifts
+**Algorithm: IC proposes, agent disposes.**
+
+1. Call `suggest_factor_weight_adjustment()`. Returns proposed weights based on the latest IC audit:
+   - Factors with strong positive IC at 20-60d → upweighted proportionally
+   - Factors with negative IC → pushed toward the 0.10 floor
+   - Max shift ±0.05 per audit (anti-thrashing)
+   - Bounds [0.10, 0.45]
+   - Sum renormalized to 1.0
+
+2. Review the proposal. The tool returns per-factor `rationale` and `factor_signals`. Read them.
+
+3. **When to override the proposal** (document reason in the journal):
+   - **Regime context**: high-VIX environment (>25 sustained) — keep more weight in quality even if momentum IC is marginally higher (quality drawdowns are smaller)
+   - **Sample size**: if the audit's sample_size per factor/horizon is < 8, treat the IC as noisy. Prefer small adjustments (half the proposed delta).
+   - **Big swings**: if any proposed delta is ≥0.05 AND it's the same direction as last week, halve it. Persistent trends are real; one-off readings aren't.
+   - **EPS revision**: not measured by audit_factor_ic (no historical data). Treat as neutral positive and preserve current weight unless you have live evidence it's working.
+
+4. Apply the final weights (yours or the proposal's) via:
+   ```python
+   write_agent_memory("factor_weights", {
+       "momentum": 0.35,   # new weights
+       "quality": 0.30,
+       "value": 0.20,
+       "eps_revision": 0.15,
+       "adjusted_at": "YYYY-MM-DD",
+       "reason": "IC suggestion: momentum +0.02, value -0.03 (value IC -0.08 at 60d). Kept eps_revision flat per skill guidance.",
+       "ic_snapshot": {  # optional — record what IC looked like when decision was made
+           "momentum_20d": 0.025,
+           "quality_20d": -0.01,
+           "value_60d": -0.08,
+       }
+   })
+   ```
+
+5. **Do NOT skip writing if nothing changes.** Always write a new entry so the `adjusted_at` timestamp reflects "last reviewed" not "last changed". Use reason="IC stable, no adjustment" if holding.
+
+**Hard limits (never override these):**
 - Total must equal 1.00
-- No single factor above 0.45 or below 0.10
-- In high-VIX environments (>25 sustained), shift weight from momentum to quality
-- If EPS revisions are consistently adding alpha, increase their weight
+- No factor < 0.10 or > 0.45
+- Changes > ±0.05 per audit require a two-line written justification referencing specific IC evidence
 
-If adjusting, update `factor_weights` memory:
-```
-write_agent_memory("factor_weights", {
-    "momentum": 0.35,
-    "quality": 0.30,
-    "value": 0.20,
-    "eps_revision": 0.15,
-    "adjusted_at": "YYYY-MM-DD",
-    "reason": "..."
-})
-```
+This closes the feedback loop: IC → proposed weights → agent review → applied weights → next week's live P&L → next week's IC. The strategy adapts to market regime without you having to manually tune it.
 
 ### 4. Sector Concentration Check
 - From current positions + buy signals, check sector distribution
@@ -131,7 +150,25 @@ write_agent_memory("ai_capex_tracker", {
 })
 ```
 
-### 8. Write Weekly Review Journal
+### 8. Strategy Health Audit (Factor IC)
+
+Run `audit_factor_ic()` — the early-warning system for strategy degradation. This computes fresh IC (rank correlation between factor scores and forward returns) over the past 3 months and compares to prior weekly audits.
+
+**Runtime**: 3-5 minutes (downloads prices + top-300 fundamentals). This is the one long tool call per week; budget for it.
+
+**Review the drift_flags list in the result**:
+- `SIGN FLIP` on any factor → the factor has reversed direction (bull/bear regime flip or arbitraged away). Investigate before next week's factor weight decisions.
+- `SIGNIFICANCE LOSS` → a previously meaningful factor has collapsed toward zero. It may no longer be pulling weight in the composite.
+- `COMPOSITE NEGATIVE` at 60d → the total scoring system has no predictive edge right now. Do NOT adjust weights wildly — sometimes composite IC is temporarily negative in transitional regimes.
+- `DRAG: <factor>` → a specific factor has IC < −0.02 at 60d. Candidate for weight reduction in Step 3.
+
+**Use IC data to inform Step 3 factor weight adjustments**. Factors with stronger positive IC at 20-60d horizons should get higher weights. Factors with persistently negative IC should be reduced toward 0.10 (the floor).
+
+**Important**: IC is statistical — a single reading isn't conclusive. Only act on drift when the same signal appears across 2+ consecutive audits, OR when the magnitude is extreme (|delta| > 0.05 in a single audit). One bad week isn't a trend.
+
+Write findings into the Step 9 journal entry — don't create a separate entry.
+
+### 9. Write Weekly Review Journal
 Create a comprehensive journal entry of type "reflection" covering:
 - Weekly alpha vs SPY
 - Factor system evaluation: which factors worked, which didn't

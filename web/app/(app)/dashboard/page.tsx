@@ -10,6 +10,7 @@ import { EarningsIntelligenceCard } from "@/components/trading/earnings-card";
 import { AiBubbleRiskCard } from "@/components/trading/AiBubbleRiskCard";
 import { AiCycleDurabilityCard } from "@/components/trading/AiCycleDurabilityCard";
 import { BacktestSummaryCard } from "@/components/trading/BacktestSummaryCard";
+import { StrategyHealthCard } from "@/components/trading/StrategyHealthCard";
 import { Card, CardContent } from "@/components/ui/card";
 
 export default function DashboardPage() {
@@ -61,10 +62,11 @@ export default function DashboardPage() {
         <BacktestSummaryCard />
       </div>
 
-      {/* Row 2: AI Sector Intelligence */}
-      <div className="grid gap-4 lg:grid-cols-2">
+      {/* Row 2: AI Sector Intelligence + Strategy Health */}
+      <div className="grid gap-4 lg:grid-cols-3">
         <AiBubbleRiskCard />
         <AiCycleDurabilityCard />
+        <StrategyHealthCard />
       </div>
 
       {/* Row 2: Portfolio Summary */}

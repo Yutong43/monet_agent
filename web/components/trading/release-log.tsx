@@ -11,6 +11,19 @@ interface ReleaseEntry {
 
 const RELEASES: ReleaseEntry[] = [
   {
+    version: "v1.5",
+    date: "Apr 17",
+    title: "Tier 1 Strategy Health Monitoring & Self-Adjustment Loop",
+    items: [
+      "audit_factor_ic(): weekly IC drift detection — recomputes factor IC over 3 months, compares to prior audits, flags sign flips and significance loss",
+      "check_live_vs_backtest_divergence(): lightweight daily check — annualized live alpha vs backtest alpha, flags divergence > 50% or > 100%",
+      "suggest_factor_weight_adjustment(): IC-driven weight proposal — upweights factors with positive IC at 20-60d, floors negative-IC factors, respects ±0.05 max shift + [0.10, 0.45] bounds",
+      "Weekly review Step 3 now runs the IC → weights loop: agent reviews proposal, allows override for regime context, writes final weights with IC snapshot in reason field",
+      "Daily EOD reflection Step 2.5 now runs divergence check and flags in journal when out-of-range",
+      "New StrategyHealthCard on dashboard: shows live vs backtest status, IC trend at 20d, drift flag count, links to /backtests",
+    ],
+  },
+  {
     version: "v1.4",
     date: "Apr 17",
     title: "Systematic Backtesting & Promoted Momentum + ATR Stops",

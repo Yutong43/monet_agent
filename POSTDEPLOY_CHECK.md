@@ -6,6 +6,17 @@ Ongoing checklist of features/behaviors to verify after deployment. When reviewi
 
 ## Pending Verification
 
+### Tier 1 Strategy Health Monitoring (first runs after Apr 17 deploy)
+**Trigger**: Next Sunday weekly review + next EOD reflection.
+- [ ] Weekly review Step 8 runs `audit_factor_ic()` without error; completes in < 10 min
+- [ ] Row written to `factor_ic_runs` with variant_name='live_audit'
+- [ ] `strategy_health` key appears in agent_memory with current_ic, drift_flags, sample_dates
+- [ ] Weekly review Step 3 runs `suggest_factor_weight_adjustment()` and writes proposal+deltas+rationale to journal
+- [ ] Agent applies (or overrides with documented reason) the proposed weights via `write_agent_memory("factor_weights", ...)`
+- [ ] EOD reflection Step 2.5 runs `check_live_vs_backtest_divergence()` and persists to `strategy_divergence`
+- [ ] If status != "aligned", one-line note appears in the daily reflection
+- [ ] Dashboard `StrategyHealthCard` renders with IC trend arrows and live-vs-backtest status
+
 ### Promoted BASELINE_VARIANT (3-component momentum + ATR stops) — next factor loop run
 **Trigger**: First factor-loop run after the Apr 17 promotion of short_mom_atr to BASELINE_VARIANT.
 - [ ] `score_universe()` completes without error using the new momentum lookbacks `[(252,22), (63,0), (21,0)]` with weights `[0.4, 0.3, 0.3]`

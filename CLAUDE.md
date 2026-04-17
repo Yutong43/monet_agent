@@ -155,6 +155,26 @@ The live scoring logic lives in `agent/src/stock_agent/factor_scoring.py:compute
 
 **Known caveat**: fundamentals come from yfinance current snapshot applied retroactively — introduces mild look-ahead in the value and quality factors. Absolute alpha numbers are optimistic; relative comparisons between variants remain valid.
 
+## Strategy Health & Self-Adjustment Loop (Tier 1 autonomy)
+
+Monet monitors its own strategy for degradation and proposes weight adjustments based on evidence, not intuition.
+
+**Three tools** (all in `tools.py`, registered in `AUTONOMOUS_TOOLS`):
+
+1. **`audit_factor_ic()`** — called weekly (weekly review Step 8). 3-5 minute runtime. Downloads prices + top-300 fundamentals, computes IC over past 3 months, persists to `factor_ic_runs` with `variant_name="live_audit"`, compares to prior audits, flags: `SIGN FLIP`, `SIGNIFICANCE LOSS`, `COMPOSITE NEGATIVE`, `DRAG` per factor. Writes summary to `agent_memory.strategy_health`.
+
+2. **`check_live_vs_backtest_divergence()`** — called daily (EOD reflection Step 2.5). Lightweight read — no data download. Compares 30-day annualized live alpha (from `equity_snapshots`) to annualized backtest alpha (from `backtest_runs`). Statuses: `aligned`, `moderate_underperformance`, `major_underperformance`, `moderate_outperformance`, `major_outperformance`. Persists to `agent_memory.strategy_divergence`.
+
+3. **`suggest_factor_weight_adjustment()`** — called in weekly review Step 3 after Step 8 audit. Reads `strategy_health` + current `factor_weights`. Algorithm:
+   - Signal per factor = 0.6 × IC(20d) + 0.4 × IC(60d)
+   - Allocate weight proportional to positive signal; negative-signal factors → floor (0.10)
+   - Clamp shift at ±0.05 per audit, bounds [0.10, 0.45], iteratively renormalize
+   - Returns proposal + rationale; **agent reviews and applies** (does NOT auto-apply)
+
+**Dashboard surface**: `StrategyHealthCard` shows live vs backtest divergence status + IC at 20d with trend arrow vs last audit.
+
+**The self-adjustment loop**: IC audit runs every Sunday → writes to `strategy_health` → weekly review reads it → proposes weights → agent reviews + applies. The system adapts to regime changes without manual tuning while keeping the human (or a guardrail) in the loop for final approval.
+
 ## Deployment
 
 - **LangGraph Platform**: `https://monet-0f211e9ce05255c2a85f92d6847873b5.us.langgraph.app`

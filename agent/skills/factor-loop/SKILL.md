@@ -51,6 +51,8 @@ and downloads SMH vs SPY data internally.
 
 Store the result: `write_agent_memory("ai_bubble_risk", result)`
 
+Also run `assess_ai_cycle_durability()` — this scores where we are in the AI capex buildout cycle (stack breadth, infra/memory/equipment momentum, capex guidance). It auto-persists to `ai_cycle_durability` memory for the dashboard. Use the cycle phase to inform position sizing in AI infra names but never to override factor signals.
+
 **Do NOT use this to block BUY signals or force SELLs.** The factor composite IS the decision.
 
 Use it as follows:

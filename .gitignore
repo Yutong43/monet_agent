@@ -39,3 +39,6 @@ Thumbs.db
 
 # Supabase
 supabase/.temp/
+
+# Backtest data cache (local-only; re-downloaded on demand)
+agent/backtest/.cache/

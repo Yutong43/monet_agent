@@ -65,6 +65,73 @@ function tradeLine(trade: Trade): string {
   return `${trade.side.toUpperCase()} ${qty} ${trade.symbol}${priceText}`;
 }
 
+// ── Markdown helpers ─────────────────────────────────────────────────────────
+
+type MdNode =
+  | { type: "heading"; text: string }
+  | { type: "bullet"; text: string }
+  | { type: "table"; headers: string[]; rows: string[][] }
+  | { type: "paragraph"; text: string };
+
+/** Parse a markdown string into typed nodes for email rendering. */
+function parseMarkdown(md: string): MdNode[] {
+  const lines = md.split("\n");
+  const nodes: MdNode[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i].trim();
+    if (!line) { i++; continue; }
+
+    // ## Heading
+    if (/^#{1,3}\s/.test(line)) {
+      nodes.push({ type: "heading", text: line.replace(/^#{1,3}\s+/, "") });
+      i++;
+      continue;
+    }
+
+    // Table block: starts with | ... |
+    if (line.startsWith("|") && line.endsWith("|")) {
+      const headerCells = line.split("|").slice(1, -1).map((c) => c.trim());
+      // skip separator row(s)
+      let j = i + 1;
+      while (j < lines.length && /^\|[\s\-:|]+\|$/.test(lines[j].trim())) j++;
+      const rows: string[][] = [];
+      while (j < lines.length && lines[j].trim().startsWith("|") && lines[j].trim().endsWith("|")) {
+        rows.push(lines[j].trim().split("|").slice(1, -1).map((c) => c.trim()));
+        j++;
+      }
+      nodes.push({ type: "table", headers: headerCells, rows });
+      i = j;
+      continue;
+    }
+
+    // - bullet
+    if (/^[-*]\s/.test(line)) {
+      nodes.push({ type: "bullet", text: line.replace(/^[-*]\s+/, "") });
+      i++;
+      continue;
+    }
+
+    // Plain paragraph
+    nodes.push({ type: "paragraph", text: line });
+    i++;
+  }
+
+  return nodes;
+}
+
+/** Render inline markdown (**bold**) into React nodes. */
+function renderInline(text: string): React.ReactNode[] {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return <strong key={i}>{part.slice(2, -2)}</strong>;
+    }
+    return part;
+  });
+}
+
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const main: React.CSSProperties = {
@@ -150,6 +217,36 @@ const reflectionPara: React.CSSProperties = {
   margin: "0 0 12px 0",
 };
 
+const mdHeading: React.CSSProperties = {
+  fontSize: "15px",
+  fontWeight: "700",
+  color: "#111827",
+  margin: "18px 0 8px 0",
+};
+
+const mdBullet: React.CSSProperties = {
+  fontSize: "14px",
+  lineHeight: "1.6",
+  color: "#374151",
+  margin: "0 0 4px 0",
+  paddingLeft: "12px",
+};
+
+const mdTableCell: React.CSSProperties = {
+  fontSize: "12px",
+  color: "#374151",
+  padding: "4px 8px",
+  borderBottom: "1px solid #e5e7eb",
+};
+
+const mdTableHeader: React.CSSProperties = {
+  ...mdTableCell,
+  fontWeight: "700",
+  color: "#111827",
+  backgroundColor: "#f9fafb",
+  borderBottom: "2px solid #d1d5db",
+};
+
 const tradeListItem: React.CSSProperties = {
   fontSize: "13px",
   color: "#374151",
@@ -182,10 +279,9 @@ export function DailyRecapEmail({
   trades,
   unsubscribeUrl,
 }: DailyRecapEmailProps) {
-  const reflectionLines = (reflectionBody || "No reflection entry was recorded today.")
-    .split("\n")
-    .map((l) => l.trim())
-    .filter(Boolean);
+  const reflectionNodes = parseMarkdown(
+    reflectionBody || "No reflection entry was recorded today."
+  );
 
   const topTrades = (trades ?? []).slice(0, 5);
 
@@ -281,11 +377,37 @@ export function DailyRecapEmail({
           {/* Reflection */}
           <Hr style={{ borderColor: "#e5e7eb", margin: "24px 0 20px 0" }} />
           <Text style={sectionLabel}>Today&apos;s recap</Text>
-          {reflectionLines.map((line, i) => (
-            <Text key={i} style={reflectionPara}>
-              {line}
-            </Text>
-          ))}
+          {reflectionNodes.map((node, i) => {
+            if (node.type === "heading") {
+              return <Text key={i} style={mdHeading}>{renderInline(node.text)}</Text>;
+            }
+            if (node.type === "bullet") {
+              return <Text key={i} style={mdBullet}>&bull;&nbsp;{renderInline(node.text)}</Text>;
+            }
+            if (node.type === "table") {
+              return (
+                <table key={i} style={{ width: "100%", borderCollapse: "collapse", margin: "8px 0 12px 0" }}>
+                  <thead>
+                    <tr>
+                      {node.headers.map((h, j) => (
+                        <th key={j} style={mdTableHeader} align="left">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {node.rows.map((row, ri) => (
+                      <tr key={ri}>
+                        {row.map((cell, ci) => (
+                          <td key={ci} style={mdTableCell}>{renderInline(cell)}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              );
+            }
+            return <Text key={i} style={reflectionPara}>{renderInline(node.text)}</Text>;
+          })}
 
           {/* Trades */}
           {topTrades.length > 0 && (

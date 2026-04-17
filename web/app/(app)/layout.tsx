@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { BarChart3, Bot, BookOpen, Activity, LogOut, User, Library } from "lucide-react";
+import { BarChart3, Bot, BookOpen, Activity, LogOut, User, Library, FlaskConical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -16,6 +16,7 @@ const navItems = [
   { href: "/chat", label: "Chat", icon: Bot },
   { href: "/journal", label: "Journal", icon: BookOpen },
   { href: "/activity", label: "Activity", icon: Activity },
+  { href: "/backtests", label: "Backtests", icon: FlaskConical },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {

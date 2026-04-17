@@ -1036,11 +1036,45 @@ def place_order(
     # Determine if bracket order
     is_bracket = take_profit_price is not None or stop_loss_price is not None
 
-    # Auto-derive stop-loss for buys if not provided but take-profit is
+    # Auto-derive stop-loss for buys if not provided but take-profit is.
+    # Uses 2x ATR(14) clamped to [3%, 8%], falling back to fixed 5% if ATR unavailable.
+    # Promoted from backtest variant short_mom_atr (v1.4) which reduced stop-hit
+    # rate from 55% → 35% vs the fixed-5% baseline.
     if is_bracket and side == "buy" and stop_loss_price is None:
         risk_settings = get_risk_settings()
-        stop_pct = risk_settings.get("default_stop_loss_pct", 5.0) / 100
+        fallback_pct = risk_settings.get("default_stop_loss_pct", 5.0) / 100
         ref_price = limit_price if limit_price else get_quote(symbol).get("last_price", 0)
+
+        stop_pct = fallback_pct
+        try:
+            from .factor_scoring import BASELINE_VARIANT
+            if BASELINE_VARIANT.stop_method == "atr" and ref_price > 0:
+                # Fetch 30d of OHLC for ATR calculation
+                bars = get_historical_data(symbol, period="1mo")
+                if isinstance(bars, list) and len(bars) >= 15:
+                    df = pd.DataFrame(bars)
+                    high = df["high"] if "high" in df.columns else df.get("High")
+                    low = df["low"] if "low" in df.columns else df.get("Low")
+                    close = df["close"] if "close" in df.columns else df.get("Close")
+                    if high is not None and low is not None and close is not None:
+                        prev_close = close.shift(1)
+                        tr = pd.concat([
+                            high - low,
+                            (high - prev_close).abs(),
+                            (low - prev_close).abs(),
+                        ], axis=1).max(axis=1)
+                        atr = tr.rolling(14).mean().iloc[-1]
+                        if pd.notna(atr) and atr > 0:
+                            atr_pct = float(atr) / float(ref_price)
+                            stop_pct = min(
+                                BASELINE_VARIANT.atr_max_pct,
+                                max(BASELINE_VARIANT.atr_min_pct,
+                                    atr_pct * BASELINE_VARIANT.atr_multiplier),
+                            )
+        except Exception as e:
+            logger.warning("ATR stop calc failed for %s (%s); using fallback %.1f%%",
+                           symbol, e, fallback_pct * 100)
+
         stop_loss_price = round(ref_price * (1 - stop_pct), 2)
 
     # Build order kwargs
@@ -2058,6 +2092,216 @@ def assess_ai_bubble_risk() -> dict:
     }
 
 
+# ============================================================
+# AI Cycle Durability Assessment
+# ============================================================
+
+# Stock baskets for each AI infrastructure layer
+AI_CYCLE_LAYERS = {
+    "Compute": ["NVDA", "AMD", "AVGO", "ARM", "TSM"],
+    "Memory": ["MU", "WDC", "STX"],
+    "Power": ["ETN", "VRT", "VST"],
+    "Networking": ["ANET", "CSCO"],
+    "Equipment": ["AMAT", "LRCX", "KLAC"],
+}
+
+
+def assess_ai_cycle_durability() -> dict:
+    """Assess AI capex cycle durability — how much runway the buildout has left.
+
+    Companion to assess_ai_bubble_risk (which measures heat/stretch).
+    This measures whether the underlying investment cycle is healthy and broadening.
+
+    Five signals, each 0-20 pts = 0-100 total:
+
+    1. Stack breadth (0-20): How many AI stack layers outperform SPY over 3 months?
+       5 layers (Compute, Memory, Power, Networking, Equipment) × 4 pts each.
+
+    2. Infra momentum (0-20): Power/cooling plays (ETN, VRT, VST) avg 3-month
+       return vs SPY. >0% outperformance starts scoring; 20%+ = full marks.
+
+    3. Memory demand (0-20): MU 3-month return vs SPY as proxy for HBM pricing.
+       0% outperformance = 0; 25%+ = full marks.
+
+    4. Equipment demand (0-20): Semi-equipment (AMAT, LRCX, KLAC) avg 3-month
+       return vs SPY. 0% = 0; 20%+ = full marks.
+
+    5. Capex signal (0-20): From ai_capex_tracker memory (quarterly manual update).
+       accelerating = 20, stable = 12, decelerating = 4, unknown = 10.
+
+    Cycle phases:
+      75-100 = "Full Build"  — all layers firing, capex accelerating
+      50-74  = "Expanding"   — most layers participating, strong demand
+      25-49  = "Maturing"    — narrowing participation, watch for turns
+      0-24   = "Cooling"     — cycle winding down, be selective
+
+    Returns:
+        Dict with score, phase, layer details, sub-signal values, and as_of.
+    """
+    import yfinance as yf
+
+    score = 0
+    details: dict = {}
+
+    # ── Helper: 3-month return for a list of tickers ──
+    end = datetime.now()
+    start_3m = end - timedelta(days=95)  # ~3 months with buffer
+
+    def _avg_return(symbols: list[str], period_start=start_3m, period_end=end) -> float | None:
+        """Average 3-month return for a basket of symbols. Returns pct or None."""
+        try:
+            hist = yf.download(
+                symbols,
+                start=period_start.strftime("%Y-%m-%d"),
+                end=period_end.strftime("%Y-%m-%d"),
+                progress=False,
+                auto_adjust=True,
+            )["Close"]
+            if len(symbols) == 1:
+                hist = hist.to_frame(symbols[0]) if hasattr(hist, "to_frame") else hist
+            returns = []
+            cols = [symbols[0]] if len(symbols) == 1 else hist.columns
+            for sym in cols:
+                series = hist[sym].dropna() if sym in hist.columns else hist.dropna()
+                if len(series) < 10:
+                    continue
+                ret = (float(series.iloc[-1]) / float(series.iloc[0]) - 1) * 100
+                returns.append(ret)
+            return round(sum(returns) / len(returns), 1) if returns else None
+        except Exception:
+            return None
+
+    # ── SPY benchmark return ──
+    spy_return = _avg_return(["SPY"])
+    if spy_return is None:
+        spy_return = 0.0
+
+    # ── Signal 1: Stack Breadth (0-20 pts) ──
+    # 5 layers × 4 pts each for outperforming SPY
+    layers_participating = 0
+    layer_details: dict[str, dict] = {}
+    for layer_name, symbols in AI_CYCLE_LAYERS.items():
+        layer_ret = _avg_return(symbols)
+        outperforming = layer_ret is not None and layer_ret > spy_return
+        layer_details[layer_name] = {
+            "return_3m_pct": layer_ret,
+            "vs_spy_pct": round(layer_ret - spy_return, 1) if layer_ret is not None else None,
+            "participating": outperforming,
+        }
+        if outperforming:
+            layers_participating += 1
+
+    breadth_pts = layers_participating * 4
+    score += breadth_pts
+    details["stack_breadth"] = {
+        "score": breadth_pts,
+        "layers_participating": layers_participating,
+        "total_layers": len(AI_CYCLE_LAYERS),
+        "layers": layer_details,
+    }
+
+    # ── Signal 2: Infra Momentum (0-20 pts) ──
+    infra_return = _avg_return(AI_CYCLE_LAYERS["Power"])
+    infra_vs_spy = round(infra_return - spy_return, 1) if infra_return is not None else 0.0
+    infra_pts = min(20, max(0, round(infra_vs_spy / 20 * 20)))
+    score += infra_pts
+    details["infra_momentum"] = {
+        "score": infra_pts,
+        "return_3m_pct": infra_return,
+        "vs_spy_pct": infra_vs_spy,
+        "tickers": AI_CYCLE_LAYERS["Power"],
+    }
+
+    # ── Signal 3: Memory Demand (0-20 pts) ──
+    mu_return = _avg_return(["MU"])
+    mu_vs_spy = round(mu_return - spy_return, 1) if mu_return is not None else 0.0
+    memory_pts = min(20, max(0, round(mu_vs_spy / 25 * 20)))
+    score += memory_pts
+    details["memory_demand"] = {
+        "score": memory_pts,
+        "mu_return_3m_pct": mu_return,
+        "vs_spy_pct": mu_vs_spy,
+    }
+
+    # ── Signal 4: Equipment Demand (0-20 pts) ──
+    equip_return = _avg_return(AI_CYCLE_LAYERS["Equipment"])
+    equip_vs_spy = round(equip_return - spy_return, 1) if equip_return is not None else 0.0
+    equip_pts = min(20, max(0, round(equip_vs_spy / 20 * 20)))
+    score += equip_pts
+    details["equipment_demand"] = {
+        "score": equip_pts,
+        "return_3m_pct": equip_return,
+        "vs_spy_pct": equip_vs_spy,
+        "tickers": AI_CYCLE_LAYERS["Equipment"],
+    }
+
+    # ── Signal 5: Capex Signal (0-20 pts) ──
+    # Read from ai_capex_tracker memory (quarterly manual update by agent/user)
+    capex_direction = "unknown"
+    capex_detail = "No capex tracker data — update ai_capex_tracker after earnings."
+    try:
+        sb = get_supabase()
+        cap_row = (
+            sb.table("agent_memory")
+            .select("value")
+            .eq("key", "ai_capex_tracker")
+            .maybeSingle()
+            .execute()
+        )
+        if cap_row.data and cap_row.data.get("value"):
+            tracker = cap_row.data["value"]
+            capex_direction = tracker.get("guidance_direction", "unknown")
+            capex_detail = tracker.get("summary", capex_detail)
+    except Exception:
+        pass
+
+    capex_scores = {"accelerating": 20, "stable": 12, "decelerating": 4, "unknown": 10}
+    capex_pts = capex_scores.get(capex_direction, 10)
+    score += capex_pts
+    details["capex_signal"] = {
+        "score": capex_pts,
+        "direction": capex_direction,
+        "detail": capex_detail,
+    }
+
+    # ── Phase determination ──
+    score = min(100, score)
+    if score >= 75:
+        phase = "full_build"
+        outlook = "All layers firing. Cycle has strong runway — new AI infra positions supported."
+    elif score >= 50:
+        phase = "expanding"
+        outlook = "Most layers participating. Cycle healthy — favor picks-and-shovels plays."
+    elif score >= 25:
+        phase = "maturing"
+        outlook = "Participation narrowing. Be selective — prefer leaders with pricing power."
+    else:
+        phase = "cooling"
+        outlook = "Cycle winding down. Avoid new capex-cycle entries — focus on AI software/services."
+
+    result = {
+        "score": score,
+        "phase": phase,
+        "phase_label": phase.replace("_", " ").title(),
+        "outlook": outlook,
+        "spy_return_3m_pct": spy_return,
+        "signals": details,
+        "as_of": datetime.now().isoformat(),
+    }
+
+    # Persist to agent_memory for dashboard card
+    try:
+        sb = get_supabase()
+        sb.table("agent_memory").upsert(
+            {"key": "ai_cycle_durability", "value": result},
+            on_conflict="key",
+        ).execute()
+    except Exception:
+        pass
+
+    return result
+
+
 def _inline_bold(text: str) -> str:
     """Convert **bold** to <strong> tags."""
     import re
@@ -2430,6 +2674,174 @@ def send_daily_subscription_emails() -> dict:
         }
     except Exception as e:
         logger.error("Failed to send daily subscription emails: %s", e)
+        return {"status": "error", "error": str(e)}
+
+
+def send_weekly_cycle_report(agent_commentary: str = "") -> dict:
+    """Send the weekly AI cycle durability report to all active subscribers.
+
+    Reads the latest ai_cycle_durability and ai_bubble_risk from agent_memory,
+    renders the WeeklyCycleReportEmail template, and sends via Resend.
+
+    Args:
+        agent_commentary: Free-form commentary from the agent about what changed
+            this week and what to watch for. Supports markdown bullet points.
+
+    Returns:
+        Dict with status, sent count, and any errors.
+    """
+    resend_api_key = os.environ.get("RESEND_API_KEY")
+    from_email = os.environ.get("DAILY_RECAP_FROM_EMAIL")
+
+    if not resend_api_key or not from_email:
+        return {
+            "status": "skipped",
+            "message": "Email delivery not configured. Set RESEND_API_KEY and DAILY_RECAP_FROM_EMAIL.",
+        }
+
+    sb = get_supabase()
+    today = datetime.now()
+    week_label = today.strftime("%B %-d, %Y")
+
+    try:
+        # Fetch subscribers
+        subs_result = (
+            sb.table("email_subscriptions")
+            .select("id, email")
+            .eq("status", "active")
+            .execute()
+        )
+        subscriptions = subs_result.data or []
+        if not subscriptions:
+            return {"status": "ok", "sent": 0, "message": "No active subscribers."}
+
+        # Read cycle durability data
+        cycle_row = (
+            sb.table("agent_memory")
+            .select("value")
+            .eq("key", "ai_cycle_durability")
+            .maybeSingle()
+            .execute()
+        )
+        cycle_data = cycle_row.data.get("value") if cycle_row.data else None
+        if not cycle_data:
+            return {"status": "skipped", "message": "No cycle durability data yet. Run assess_ai_cycle_durability first."}
+
+        # Read heat data for companion context
+        heat_row = (
+            sb.table("agent_memory")
+            .select("value")
+            .eq("key", "ai_bubble_risk")
+            .maybeSingle()
+            .execute()
+        )
+        heat_data = heat_row.data.get("value") if heat_row.data else {}
+
+        # Read previous week's score for delta display
+        prev_row = (
+            sb.table("agent_memory")
+            .select("value")
+            .eq("key", "ai_cycle_durability_prev")
+            .maybeSingle()
+            .execute()
+        )
+        prev_score = None
+        if prev_row.data and prev_row.data.get("value"):
+            prev_score = prev_row.data["value"].get("score")
+
+        # Save current as prev for next week's delta
+        sb.table("agent_memory").upsert(
+            {"key": "ai_cycle_durability_prev", "value": {"score": cycle_data["score"], "as_of": today.isoformat()}},
+            on_conflict="key",
+        ).execute()
+
+        signals = cycle_data.get("signals", {})
+        stack = signals.get("stack_breadth", {})
+        layers = stack.get("layers", {})
+
+        app_url = os.environ.get("NEXT_APP_URL", "https://monet.app")
+        subject = f"Monet AI Cycle Report — Week of {week_label}"
+        sent_count = 0
+
+        with httpx.Client(timeout=20.0) as client:
+            for sub in subscriptions:
+                import urllib.parse
+                unsub_url = f"{app_url}/api/unsubscribe?email={urllib.parse.quote(sub['email'])}"
+
+                # Build email payload for React Email renderer
+                render_payload = {
+                    "template": "weekly_cycle_report",
+                    "weekLabel": week_label,
+                    "cycleScore": cycle_data["score"],
+                    "cyclePhaseLabel": cycle_data.get("phase_label", "Unknown"),
+                    "cycleOutlook": cycle_data.get("outlook", ""),
+                    "layersParticipating": stack.get("layers_participating", 0),
+                    "totalLayers": stack.get("total_layers", 5),
+                    "layers": layers,
+                    "infraVsSpy": signals.get("infra_momentum", {}).get("vs_spy_pct"),
+                    "memoryVsSpy": signals.get("memory_demand", {}).get("vs_spy_pct"),
+                    "equipmentVsSpy": signals.get("equipment_demand", {}).get("vs_spy_pct"),
+                    "capexDirection": signals.get("capex_signal", {}).get("direction", "unknown"),
+                    "spyReturn3m": cycle_data.get("spy_return_3m_pct"),
+                    "heatScore": heat_data.get("score"),
+                    "heatLevel": heat_data.get("level"),
+                    "prevCycleScore": prev_score,
+                    "agentCommentary": agent_commentary,
+                    "recipientEmail": sub["email"],
+                }
+
+                # Try React Email renderer first, fall back to plain HTML
+                html_body = None
+                text_body = None
+                try:
+                    render_resp = client.post(
+                        f"{app_url}/api/email/render",
+                        json=render_payload,
+                        timeout=15.0,
+                    )
+                    if render_resp.status_code == 200:
+                        rendered = render_resp.json()
+                        html_body = rendered.get("html")
+                        text_body = rendered.get("text")
+                except Exception:
+                    pass
+
+                # Fallback plain text
+                if not text_body:
+                    text_body = (
+                        f"Monet AI Cycle Report — {week_label}\n\n"
+                        f"Cycle Durability: {cycle_data['score']} ({cycle_data.get('phase_label', '')})\n"
+                        f"Sector Heat: {heat_data.get('score', '—')} ({heat_data.get('level', '—')})\n\n"
+                        f"{cycle_data.get('outlook', '')}\n\n"
+                        f"{agent_commentary}\n\n---\nUnsubscribe: {unsub_url}"
+                    )
+                if not html_body:
+                    html_body = text_body.replace("\n", "<br>")
+
+                response = client.post(
+                    "https://api.resend.com/emails",
+                    headers={
+                        "Authorization": f"Bearer {resend_api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "from": from_email,
+                        "to": [sub["email"]],
+                        "subject": subject,
+                        "html": html_body,
+                        "text": text_body,
+                    },
+                )
+                response.raise_for_status()
+                sent_count += 1
+
+        return {
+            "status": "ok",
+            "sent": sent_count,
+            "message": f"Sent weekly cycle report to {sent_count} subscribers.",
+        }
+    except Exception as e:
+        logger.error("Failed to send weekly cycle report: %s", e)
         return {"status": "error", "error": str(e)}
 
 
@@ -2859,124 +3271,71 @@ def score_universe(top_n: int = 30) -> dict:
 
     close = price_data["Close"]
 
-    # Step 2: Momentum factor
-    # 12-month return excluding last month (classic momentum)
-    if len(close) >= 252:
-        ret_12m_ex1m = (close.iloc[-22] / close.iloc[0] - 1).dropna()
-    else:
-        ret_12m_ex1m = (close.iloc[-22] / close.iloc[0] - 1).dropna() if len(close) > 22 else pd.Series(dtype=float)
+    # Step 2: Compute momentum on full universe (lets us pre-filter below)
+    from .factor_scoring import (
+        BASELINE_VARIANT,
+        compute_factor_scores,
+        compute_momentum,
+    )
 
-    # 3-month return
-    lookback_3m = min(63, len(close) - 1)
-    ret_3m = (close.iloc[-1] / close.iloc[-lookback_3m] - 1).dropna() if lookback_3m > 0 else pd.Series(dtype=float)
-
-    # Combined momentum score: 50% 12m-ex-1m + 50% 3m
-    common_syms = ret_12m_ex1m.index.intersection(ret_3m.index)
-    if len(common_syms) == 0:
+    variant = BASELINE_VARIANT
+    momentum_score = compute_momentum(close, variant)
+    if len(momentum_score) == 0:
         return {"error": "No valid momentum data", "rankings": []}
 
-    momentum_rank_12m = _percentile_rank(ret_12m_ex1m[common_syms])
-    momentum_rank_3m = _percentile_rank(ret_3m[common_syms])
-    momentum_score = 0.5 * momentum_rank_12m + 0.5 * momentum_rank_3m
+    # Keep 3m and 12m-ex-1m returns for downstream UI display
+    ret_3m = pd.Series(dtype=float)
+    ret_12m_ex1m = pd.Series(dtype=float)
+    try:
+        if len(close) > 22:
+            ret_12m_ex1m = (close.iloc[-22] / close.iloc[0] - 1).dropna()
+        lookback_3m = min(63, len(close) - 1)
+        if lookback_3m > 0:
+            ret_3m = (close.iloc[-1] / close.iloc[-lookback_3m] - 1).dropna()
+    except Exception:
+        pass
 
-    # Step 3: Pre-filter top ~150 by momentum for fundamental lookups
-    top_momentum = momentum_score.nlargest(150)
-    candidates = top_momentum.index.tolist()
+    # Step 3: Pre-filter top N by momentum, fetch fundamentals for candidates
+    candidates = (
+        momentum_score.nlargest(variant.prefilter_top_n).index.tolist()
+        if variant.prefilter_top_n
+        else momentum_score.index.tolist()
+    )
 
-    # Step 4-6: Fetch fundamentals and compute quality + value factors
-    results = []
-    sector_fwd_pe: dict[str, list] = {}  # For within-sector value ranking
-
+    fundamentals: dict[str, dict] = {}
     for sym in candidates:
         try:
             info = yf.Ticker(sym).info
-            sector = info.get("sector", "Unknown")
-            fwd_pe = info.get("forwardPE")
-            profit_margin = info.get("profitMargins")
-            roe = info.get("returnOnEquity")
-            de = info.get("debtToEquity")
-            current_price = info.get("currentPrice") or info.get("regularMarketPrice")
-
-            results.append({
-                "symbol": sym,
-                "sector": sector,
-                "forward_pe": fwd_pe,
-                "profit_margin": profit_margin,
-                "roe": roe,
-                "debt_to_equity": de,
-                "current_price": current_price,
-                "return_3m": round(float(ret_3m.get(sym, 0)), 4),
-                "return_12m_ex1m": round(float(ret_12m_ex1m.get(sym, 0)), 4),
-                "momentum_score": round(float(momentum_score.get(sym, 0)), 1),
-            })
-
-            # Track forward P/E by sector for within-sector value ranking
-            if fwd_pe and fwd_pe > 0:
-                sector_fwd_pe.setdefault(sector, []).append((sym, fwd_pe))
-
+            fundamentals[sym] = {
+                "sector": info.get("sector", "Unknown"),
+                "forward_pe": info.get("forwardPE"),
+                "profit_margin": info.get("profitMargins"),
+                "roe": info.get("returnOnEquity"),
+                "debt_to_equity": info.get("debtToEquity"),
+                "current_price": info.get("currentPrice") or info.get("regularMarketPrice"),
+            }
         except Exception:
             continue
 
-    if not results:
+    if not fundamentals:
         return {"error": "No fundamental data retrieved", "rankings": []}
 
-    # Compute quality factor
-    margins = pd.Series({r["symbol"]: r["profit_margin"] for r in results if r["profit_margin"] is not None})
-    roes = pd.Series({r["symbol"]: r["roe"] for r in results if r["roe"] is not None})
-    leverages = pd.Series({r["symbol"]: r["debt_to_equity"] for r in results if r["debt_to_equity"] is not None})
-
-    margin_rank = _percentile_rank(margins)
-    roe_rank = _percentile_rank(roes)
-    leverage_rank = _percentile_rank(leverages)
-
-    # Compute within-sector value factor (lower forward P/E = higher value)
-    value_scores: dict[str, float] = {}
-    for sector, pe_list in sector_fwd_pe.items():
-        if len(pe_list) < 2:
-            for sym, _ in pe_list:
-                value_scores[sym] = 50.0  # Not enough peers
-            continue
-        syms, pes = zip(*pe_list)
-        pe_series = pd.Series(pes, index=syms)
-        # Invert: lower P/E = higher score
-        value_rank = 100 - _percentile_rank(pe_series)
-        for s in syms:
-            if s in value_rank.index and not pd.isna(value_rank[s]):
-                value_scores[s] = round(float(value_rank[s]), 1)
-
-    # Assemble final scores — use stored weights from weekly review
+    # Step 4: Call shared pure scoring function
     factor_weights = _load_factor_weights()
+    results = compute_factor_scores(
+        close=close,
+        fundamentals=fundamentals,
+        variant=variant,
+        factor_weights=factor_weights,
+    )
 
+    # Step 5: Attach raw returns for UI compatibility (return_3m, return_12m_ex1m)
     for r in results:
         sym = r["symbol"]
-        # Quality: 0.4*margin + 0.4*roe + 0.2*(100-leverage)
-        m_rank = float(margin_rank.get(sym, 50))
-        r_rank = float(roe_rank.get(sym, 50))
-        l_rank = float(leverage_rank.get(sym, 50))
-        quality = 0.4 * m_rank + 0.4 * r_rank + 0.2 * (100 - l_rank)
-
-        value = value_scores.get(sym, 50.0)
-        mom = r["momentum_score"]
-        eps_rev = 50.0  # Default — enriched later by enrich_eps_revisions
-
-        composite = (
-            factor_weights["momentum"] * mom
-            + factor_weights["quality"] * quality
-            + factor_weights["value"] * value
-            + factor_weights["eps_revision"] * eps_rev
+        r["return_3m"] = round(float(ret_3m.get(sym, 0)), 4) if sym in ret_3m.index else 0.0
+        r["return_12m_ex1m"] = (
+            round(float(ret_12m_ex1m.get(sym, 0)), 4) if sym in ret_12m_ex1m.index else 0.0
         )
-
-        r["quality_score"] = round(quality, 1)
-        r["value_score"] = round(value, 1)
-        r["eps_revision_score"] = eps_rev
-        r["composite_score"] = round(composite, 1)
-
-    # Sort by composite, take top
-    results.sort(key=lambda x: x["composite_score"], reverse=True)
-
-    # Add rank
-    for i, r in enumerate(results):
-        r["rank"] = i + 1
 
     # Sanity check: if scoring returned very few results, fall back to cached data
     if len(results) < 20:
@@ -3641,6 +4000,9 @@ AUTONOMOUS_TOOLS = [
     get_earnings_results,
     # AI bubble / concentration risk
     assess_ai_bubble_risk,
+    # AI cycle durability
+    assess_ai_cycle_durability,
+    send_weekly_cycle_report,
 ]
 
 def submit_user_insight(

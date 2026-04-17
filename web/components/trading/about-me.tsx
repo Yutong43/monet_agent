@@ -38,7 +38,7 @@ const MEMORY_KEYS = [
 const SKILLS_EN = [
   "Factor-Based Scoring",
   "Universe Screening (900 stocks)",
-  "Momentum Factor",
+  "Momentum Factor (1m/3m/12m)",
   "Quality Factor",
   "Value Factor",
   "EPS Revision Tracking",
@@ -48,15 +48,18 @@ const SKILLS_EN = [
   "Sector Rotation",
   "Risk Management",
   "Position Sizing",
-  "Bracket Orders",
+  "ATR-Based Stops",
   "Anti-Churn Controls",
   "Portfolio Rebalancing",
+  "Systematic Backtesting",
+  "Factor IC Analysis",
+  "Variant Experimentation",
 ];
 
 const SKILLS_ZH = [
   "因子评分系统",
   "全市场扫描 (900+股票)",
-  "动量因子",
+  "动量因子（1月/3月/12月）",
   "质量因子",
   "价值因子",
   "EPS修正追踪",
@@ -66,9 +69,12 @@ const SKILLS_ZH = [
   "板块轮动",
   "风险管理",
   "仓位管理",
-  "止盈止损挂单",
+  "ATR波动率止损",
   "防频繁交易控制",
   "组合再平衡",
+  "系统化回测",
+  "因子IC分析",
+  "算法变体实验",
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -100,7 +106,7 @@ function buildContent(memories: Record<string, any>, watchlist: WatchlistRow[], 
       pass1Title: "1. Score the Universe",
       pass1Desc: `In a single pass (~75 seconds), Monet downloads price and fundamental data for ~900 stocks and ranks them on four factors:`,
       factors: [
-        { name: "Momentum", weight: Math.round(mom * 100), desc: "3-month + 12-month-ex-1-month returns — price trend strength" },
+        { name: "Momentum", weight: Math.round(mom * 100), desc: "1-month + 3-month + 12-month-ex-1-month returns — blended trend signal across horizons" },
         { name: "Quality", weight: Math.round(qual * 100), desc: "Profit margins, ROE, leverage — business durability" },
         { name: "Value", weight: Math.round(val * 100), desc: "Forward P/E vs sector peers — relative cheapness" },
         { name: "EPS Revision", weight: Math.round(eps * 100), desc: "Analyst estimate direction + breadth — where consensus is shifting" },
@@ -112,9 +118,30 @@ function buildContent(memories: Record<string, any>, watchlist: WatchlistRow[], 
         "Composite > 80 → Market order (get the fill)",
         "Composite 70-80 → Limit order 1% below",
         "Composite 60-70 → Limit order 3% below",
-        "Every position gets automatic stop-loss and take-profit brackets",
+        "Volatility-aware stops: 2x ATR(14), clamped 3-8% — no more whipsaws on volatile names",
         "Anti-churn rules prevent selling positions held < 5 days",
       ],
+      labTitle: "Backtest Lab — The Scientific Method",
+      labIntro: "Unlike most retail strategies that change on gut feel, Monet runs a parallel backtest harness. Every algorithm change is validated against 12 months of historical data before it touches live money.",
+      labPillars: [
+        {
+          name: "Factor IC Analysis",
+          desc: "Measures the statistical correlation between factor scores and forward 5/10/20/60-day returns. Answers: 'is this signal actually predictive — and at what horizon?' Surfaces which factors deserve weight and which are actively hurting.",
+        },
+        {
+          name: "Portfolio Simulation",
+          desc: "Day-by-day replay of the full trading loop against historical prices, with no look-ahead bias. Computes Sharpe, alpha, max drawdown, win rate, and stop-hit rate for each variant.",
+        },
+        {
+          name: "Variant Comparison",
+          desc: "Side-by-side metrics for parameter sets (momentum blend, stop method, factor weights). The current live algorithm was selected from 4 candidates after the short_mom_atr variant delivered +29.3% alpha vs +24.0% baseline over 12 months.",
+        },
+        {
+          name: "Reproducibility",
+          desc: "All runs persist to the database with exact config. Every variant can be re-run, shared, and audited. No hidden parameters, no 'it worked in my head' strategies.",
+        },
+      ],
+      labFooter: "This is the difference between an AI that guesses and an AI that experiments. See live runs and factor IC on the Backtests page.",
       edgeTitle: "Where AI Has a Real Edge",
       edges: [
         { label: "Breadth", desc: "Score 900 stocks in one pass, not 3-5 deep dives" },
@@ -155,7 +182,7 @@ function buildContent(memories: Record<string, any>, watchlist: WatchlistRow[], 
     pass1Title: "1. 全市场评分",
     pass1Desc: "单次扫描（约75秒），Monet下载约900只股票的价格和基本面数据，按四个因子进行排名：",
     factors: [
-      { name: "动量", weight: Math.round(mom * 100), desc: "3个月 + 12个月（去掉近1个月）收益率 — 价格趋势强度" },
+      { name: "动量", weight: Math.round(mom * 100), desc: "1个月 + 3个月 + 12个月（去掉近1个月）收益率 — 跨周期动量混合信号" },
       { name: "质量", weight: Math.round(qual * 100), desc: "利润率、ROE、杠杆率 — 业务可持续性" },
       { name: "价值", weight: Math.round(val * 100), desc: "远期市盈率 vs 同行业 — 相对便宜程度" },
       { name: "EPS修正", weight: Math.round(eps * 100), desc: "分析师预估方向 + 广度 — 市场共识的变化方向" },
@@ -167,9 +194,30 @@ function buildContent(memories: Record<string, any>, watchlist: WatchlistRow[], 
       "综合评分 > 80 → 市价单（确保成交）",
       "综合评分 70-80 → 限价单（低于现价1%）",
       "综合评分 60-70 → 限价单（低于现价3%）",
-      "每个仓位自动设置止盈止损挂单",
+      "波动率自适应止损：2倍ATR(14)，限制在3-8%之间 — 避免高波动股票被频繁扫损",
       "防频繁交易规则：持仓不足5天不卖出",
     ],
+    labTitle: "回测实验室 — 科学方法",
+    labIntro: "不同于大多数凭直觉改策略的散户交易，Monet 运行并行回测系统。每一次算法变更都要在12个月历史数据上验证，才允许应用于真实资金。",
+    labPillars: [
+      {
+        name: "因子IC分析",
+        desc: "衡量因子评分与未来5/10/20/60日收益的统计相关性。回答：'这个信号真的有预测力吗？在什么时间窗口？' 揭示哪些因子值得加权，哪些因子正在拖累组合。",
+      },
+      {
+        name: "组合模拟回测",
+        desc: "基于历史价格逐日重放完整交易流程，无前瞻偏差。计算每个变体的夏普比、阿尔法、最大回撤、胜率和止损触发率。",
+      },
+      {
+        name: "变体对比",
+        desc: "参数组合（动量混合、止损方法、因子权重）的并排指标对比。当前实盘算法是从4个候选中选出的 — short_mom_atr 变体在12个月内实现了 +29.3% 阿尔法，显著优于基线的 +24.0%。",
+      },
+      {
+        name: "可复现性",
+        desc: "所有回测结果都持久化到数据库，包含精确配置。任何变体都可以重新运行、分享和审计。无隐藏参数，无'脑海中成立'的策略。",
+      },
+    ],
+    labFooter: "这就是'会猜'的AI和'会实验'的AI的差别。在回测页面查看实时运行和因子IC数据。",
     edgeTitle: "AI的真正优势",
     edges: [
       { label: "广度", desc: "一次扫描900只股票，而非深度分析3-5只" },
@@ -357,6 +405,21 @@ export function AboutMeSection() {
                 </ul>
                 <p className="text-xs text-muted-foreground italic">{c.llmFooter}</p>
               </div>
+            </div>
+
+            {/* Backtest Lab */}
+            <div className="space-y-3">
+              <h2 className="text-lg font-semibold">{c.labTitle}</h2>
+              <p className="text-sm">{c.labIntro}</p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {c.labPillars.map((p) => (
+                  <div key={p.name} className="rounded-lg border p-3">
+                    <p className="text-sm font-semibold">{p.name}</p>
+                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{p.desc}</p>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground italic">{c.labFooter}</p>
             </div>
 
             {/* Risk Controls */}

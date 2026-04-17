@@ -8,6 +8,8 @@ import { PortfolioSummary, PositionsTable } from "@/components/trading/portfolio
 import { TradeCard, TradeCardCompact } from "@/components/trading/trade-card";
 import { EarningsIntelligenceCard } from "@/components/trading/earnings-card";
 import { AiBubbleRiskCard } from "@/components/trading/AiBubbleRiskCard";
+import { AiCycleDurabilityCard } from "@/components/trading/AiCycleDurabilityCard";
+import { BacktestSummaryCard } from "@/components/trading/BacktestSummaryCard";
 import { Card, CardContent } from "@/components/ui/card";
 
 export default function DashboardPage() {
@@ -56,7 +58,13 @@ export default function DashboardPage() {
         <PerformanceCard />
         <FactorSystemCard />
         <BenchmarkCard />
+        <BacktestSummaryCard />
+      </div>
+
+      {/* Row 2: AI Sector Intelligence */}
+      <div className="grid gap-4 lg:grid-cols-2">
         <AiBubbleRiskCard />
+        <AiCycleDurabilityCard />
       </div>
 
       {/* Row 2: Portfolio Summary */}

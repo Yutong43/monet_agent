@@ -101,7 +101,37 @@ ORDER BY created_at DESC
 - Were any catalysts this week correctly anticipated? Did the guard help?
 - Update catalyst list if needed via `write_agent_memory("upcoming_catalysts", ...)`
 
-### 7. Write Weekly Review Journal
+### 7. AI Cycle Durability Assessment & Weekly Report
+
+Run `assess_ai_cycle_durability()` to score the current AI capex cycle. This tool:
+- Measures 5 signals: stack breadth, infra momentum, memory demand, equipment demand, capex trajectory
+- Compares each AI infrastructure layer's 3-month return vs SPY
+- Reads the `ai_capex_tracker` memory for quarterly hyperscaler capex guidance
+- Persists results to `ai_cycle_durability` memory for the dashboard card
+
+After reviewing the results, send the weekly cycle report via `send_weekly_cycle_report(agent_commentary=...)`:
+- Write 3-5 sentences of commentary covering:
+  - What changed since last week (new layers participating/lagging, momentum shifts)
+  - Which specific stocks/layers are driving the score
+  - What to watch for next week (upcoming earnings, capex guidance, supply signals)
+  - Whether the cycle phase warrants any portfolio action
+- The tool automatically includes both cycle durability and sector heat data
+- It renders a full HTML email with signal breakdown, layer details, and data sources
+
+**Capex tracker maintenance**: If any hyperscaler (MSFT, GOOG, AMZN, META) reported earnings this week, update `ai_capex_tracker` memory:
+```
+write_agent_memory("ai_capex_tracker", {
+    "guidance_direction": "accelerating" | "stable" | "decelerating",
+    "summary": "Brief summary of latest capex guidance across hyperscalers",
+    "last_updated_quarter": "Q1 2026",
+    "details": {
+        "MSFT": {"capex_bn": 15.8, "yoy_growth_pct": 42, "guidance": "..."},
+        "GOOG": {...}, "AMZN": {...}, "META": {...}
+    }
+})
+```
+
+### 8. Write Weekly Review Journal
 Create a comprehensive journal entry of type "reflection" covering:
 - Weekly alpha vs SPY
 - Factor system evaluation: which factors worked, which didn't

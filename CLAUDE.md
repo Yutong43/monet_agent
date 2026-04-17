@@ -131,6 +131,30 @@ Order aggressiveness is derived from the factor composite score (0-100), passed 
 
 **Key principle**: Factor scores drive order type, not subjective conviction. Sector rotation is a soft signal, not a hard gate.
 
+## Scoring Configuration (shared with backtester)
+
+The live scoring logic lives in `agent/src/stock_agent/factor_scoring.py:compute_factor_scores()`. Both `score_universe()` (live) and the backtest engine call this same pure function — no logic duplication.
+
+**Current `BASELINE_VARIANT` (promoted from `short_mom_atr` Apr 17, 2026):**
+- Momentum: 1-month + 3-month + 12-month-ex-1-month blend, weights `[0.4, 0.3, 0.3]`
+- Pre-filter top 150 by momentum before fundamentals
+- Stop method: `atr` — 2x ATR(14) clamped `[0.03, 0.08]`
+- Rationale: 12-month backtest showed +29.3% alpha vs fixed-5%-stop baseline (+24.0%) and reduced stop-hit rate from 55% → 35%.
+
+`place_order()` auto-computes ATR-based stops via `BASELINE_VARIANT.stop_method == "atr"` when caller does not pass an explicit `stop_loss_price`. Falls back to `default_stop_loss_pct` (5%) from risk_settings if ATR data unavailable.
+
+## Backtesting & Factor IC Analysis
+
+`agent/backtest/` module: systematic validation of algorithm changes before live deployment.
+
+**Two layers:**
+- **Factor IC Analysis** (`python -m backtest.factor_ic`) — rank correlation between factor scores and forward 5/10/20/60-day returns. Fast; answers "does this factor predict?"
+- **Portfolio Simulation** (`python -m backtest.runner --variant all`) — full day-by-day simulation with no look-ahead. Computes Sharpe, alpha, max DD, win rate, stop-hit rate.
+
+**Variants live in `agent/backtest/variants.py`.** Add new variants to test: momentum lookbacks, stop methods, factor weight rebalances. All runs persist to Supabase (`backtest_runs`, `backtest_snapshots`, `backtest_trades`, `factor_ic_runs`) and surface in the `/backtests` dashboard page.
+
+**Known caveat**: fundamentals come from yfinance current snapshot applied retroactively — introduces mild look-ahead in the value and quality factors. Absolute alpha numbers are optimistic; relative comparisons between variants remain valid.
+
 ## Deployment
 
 - **LangGraph Platform**: `https://monet-0f211e9ce05255c2a85f92d6847873b5.us.langgraph.app`
@@ -145,7 +169,12 @@ Order aggressiveness is derived from the factor composite score (0-100), passed 
 | `agent_journal` | Timestamped entries (research, analysis, trade, reflection, user_insight) |
 | `trades` | Trade log with thesis, confidence, broker_order_id, status |
 | `watchlist` | Symbols with thesis, target_entry, target_exit (auto-synced by update_stock_analysis) |
-| `risk_settings` | Single row: max_position_pct, max_daily_loss, max_total_exposure_pct, default_stop_loss_pct |
+| `risk_settings` | Single row: max_position_pct, max_daily_loss, max_total_exposure_pct, default_stop_loss_pct (ATR fallback) |
+| `equity_snapshots` | Daily live portfolio equity + SPY close + cumulative returns + alpha (when deployed > 50%) |
+| `backtest_runs` | One row per backtest run: variant_name, config JSON, period, final metrics |
+| `backtest_snapshots` | Daily equity/cash/spy rows per backtest run (PK: run_id + date) |
+| `backtest_trades` | Simulated trades per backtest run with exit_reason and P&L |
+| `factor_ic_runs` | Factor IC analysis results by variant/factor/horizon |
 | `profiles` | Web UI viewer profiles |
 
 ## Key Patterns

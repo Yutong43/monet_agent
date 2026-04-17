@@ -6,6 +6,28 @@ Ongoing checklist of features/behaviors to verify after deployment. When reviewi
 
 ## Pending Verification
 
+### Promoted BASELINE_VARIANT (3-component momentum + ATR stops) — next factor loop run
+**Trigger**: First factor-loop run after the Apr 17 promotion of short_mom_atr to BASELINE_VARIANT.
+- [ ] `score_universe()` completes without error using the new momentum lookbacks `[(252,22), (63,0), (21,0)]` with weights `[0.4, 0.3, 0.3]`
+- [ ] Rankings show movement from previous baseline (top-10 should shuffle by 2-5 positions; if identical, the new momentum component isn't wired in)
+- [ ] `place_order()` for a new BUY computes ATR-based stop: stop_pct falls in [3%, 8%] and scales with the symbol's realized volatility
+- [ ] Stop levels for low-vol names (large-cap tech like MSFT/AAPL) should cluster near 3% floor; high-vol energy/small-cap near 8% cap
+- [ ] Factor loop journal entry notes "stop=atr" or equivalent — confirms live system is using new logic, not fixed 5%
+- [ ] Over 4 weeks: stop-hit rate drops materially vs historical ~55% baseline (target: <45% based on backtest predicting 35%)
+
+### Backtest UI surfacing (after Apr 17 deploy)
+**Trigger**: Visit `/dashboard` and `/backtests` after Vercel redeploy.
+- [ ] Dashboard Row 1 shows BacktestSummaryCard as 4th card with best-alpha variant + Sharpe + win rate
+- [ ] BacktestSummaryCard links through to `/backtests` page on click
+- [ ] `/backtests` page renders IC heatmap with 4 variants × 4 factors × 4 horizons
+- [ ] Run comparison table shows 4+ completed runs sorted by alpha
+- [ ] Clicking a row opens RunDetail with equity curve (Recharts) + trade log
+- [ ] Factor IC `|t|≥2` markers correctly highlight statistically significant cells
+- [ ] About Me page has new "Backtest Lab — The Scientific Method" section with 4 pillar cards
+
+### Systematic Backtesting System (verified Apr 17)
+Completed — first run showed baseline +24.0% alpha, short_mom_atr +29.3% alpha, stop-hit rate 55% → 35%. Promoted short_mom_atr to live via BASELINE_VARIANT update.
+
 ### Position Reconciliation (next factor loop run — Mar 21)
 **Trigger**: First factor-loop run after `reconcile_positions()` deployed (Mar 20).
 - [ ] `reconcile_positions()` called in Step 0 without error

@@ -11,6 +11,22 @@ interface ReleaseEntry {
 
 const RELEASES: ReleaseEntry[] = [
   {
+    version: "v1.4",
+    date: "Apr 17",
+    title: "Systematic Backtesting & Promoted Momentum + ATR Stops",
+    items: [
+      "New agent/backtest/ module: day-by-day portfolio simulator sharing scoring logic with live system via extracted factor_scoring.py",
+      "Factor IC analysis: rank correlation between factor scores and forward 5/10/20/60-day returns — validates predictive power by horizon",
+      "4 variants compared over 12 months: baseline +24.0% alpha → short_mom_atr +29.3% alpha (best), stop-hit rate 55% → 35%",
+      "Live promotion: BASELINE_VARIANT updated to 3-component momentum (1m+3m+12m_ex1m with 0.4/0.3/0.3 weights) and 2x ATR(14) stops clamped 3-8%",
+      "place_order now auto-computes ATR-based stop when no stop price provided; falls back to 5% fixed if ATR unavailable",
+      "New /backtests dashboard page: factor IC heatmap, run comparison table, per-run equity curve + trade log",
+      "Dashboard BacktestSummaryCard: surfaces best variant alpha + Sharpe + win rate on main screen",
+      "Supabase tables: backtest_runs, backtest_snapshots, backtest_trades, factor_ic_runs",
+      "CLI entry points: python -m backtest.factor_ic and python -m backtest.runner (with --variant all for batch comparison)",
+    ],
+  },
+  {
     version: "v1.3",
     date: "Mar 17",
     title: "AI Bubble / Sector Concentration Risk Monitor",

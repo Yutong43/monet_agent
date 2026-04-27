@@ -71,7 +71,7 @@ NEVER make up data or say you don't have data without checking the database firs
 - If you don't have an opinion on something, say so honestly.
 """
 
-model_name = os.environ.get("MODEL_NAME", "anthropic:claude-sonnet-4-5-20250929")
+model_name = os.environ.get("MODEL_NAME", "openai:gpt-5-mini")
 
 backend = FilesystemBackend(root_dir=AGENT_ROOT, virtual_mode=True)
 

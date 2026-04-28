@@ -1848,7 +1848,27 @@ def query_database(sql: str) -> dict:
         result = sb.rpc("exec_readonly_sql", {"query": normalized}).execute()
         return {"rows": result.data}
     except Exception as e:
-        return {"error": str(e)}
+        error_text = str(e)
+
+        # Surface missing hosted-Supabase schema setup clearly so chat falls back
+        # with an actionable explanation instead of an opaque RPC error.
+        if "PGRST202" in error_text and "exec_readonly_sql" in error_text:
+            return {
+                "error": (
+                    "Internal database query function is not installed in hosted Supabase. "
+                    "Run migration 20260307013808_add_readonly_sql_function.sql."
+                )
+            }
+
+        if "PGRST205" in error_text and "schema cache" in error_text:
+            return {
+                "error": (
+                    "Internal database tables are missing from hosted Supabase. "
+                    "Run the required Supabase schema migrations before using query_database."
+                )
+            }
+
+        return {"error": error_text}
 
 
 # ============================================================

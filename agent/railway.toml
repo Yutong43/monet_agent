@@ -1,0 +1,8 @@
+[build]
+builder = "NIXPACKS"
+
+[deploy]
+startCommand = "langgraph dev --host 0.0.0.0 --port $PORT --no-browser --no-reload"
+healthcheckPath = "/ok"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3

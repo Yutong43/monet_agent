@@ -1,5 +1,5 @@
 {
-  "dependencies": [".", "langchain_anthropic"],
+  "dependencies": [".", "langchain_openai"],
   "graphs": {
     "monet_agent": "./src/stock_agent/agent.py:graph",
     "autonomous_loop": "./src/stock_agent/autonomy.py:autonomous_graph"

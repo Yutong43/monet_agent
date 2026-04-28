@@ -244,9 +244,9 @@ The median individual investor underperforms SPY by 3-5% annually (DALBAR). Main
 ## Environment Variables
 
 Required in `agent/.env`:
-- `ANTHROPIC_API_KEY` — LLM
+- `OPENAI_API_KEY` — LLM
 - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` — Database
 - `ALPACA_API_KEY`, `ALPACA_SECRET_KEY`, `ALPACA_BASE_URL` — Paper trading
 - `TAVILY_API_KEY` — Web search
 - `LANGSMITH_API_KEY`, `LANGSMITH_TRACING`, `LANGSMITH_PROJECT` — Observability
-- `MODEL_NAME` — Model ID (default: `anthropic:claude-sonnet-4-5-20250929`)
+- `MODEL_NAME` — Model ID (default: `openai:gpt-5-mini`)

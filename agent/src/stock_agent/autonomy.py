@@ -70,7 +70,7 @@ Available phases:
 - **Price Check** — /skills/price-check/SKILL.md (lightweight alert check)
 """
 
-model_name = os.environ.get("MODEL_NAME", "anthropic:claude-sonnet-4-5-20250929")
+model_name = os.environ.get("MODEL_NAME", "openai:gpt-5-mini")
 
 backend = FilesystemBackend(root_dir=AGENT_ROOT, virtual_mode=True)
 

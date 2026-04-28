@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 
-const anthropic = new Anthropic();
+const openai = new OpenAI();
+const titleModel = process.env.OPENAI_TITLE_MODEL ?? "gpt-5-mini";
 
 export async function POST(request: Request) {
   try {
@@ -9,22 +10,20 @@ export async function POST(request: Request) {
       messages: Array<{ role: string; content: string }>;
     };
 
-    const formatted = messages.slice(0, 6).map((m) => ({
-      role: m.role as "user" | "assistant",
-      content: m.content.slice(0, 500),
-    }));
+    const formatted = messages
+      .slice(0, 6)
+      .map((m) => `${m.role}: ${m.content.slice(0, 500)}`)
+      .join("\n");
 
-    const response = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 30,
-      system:
+    const response = await openai.responses.create({
+      model: titleModel,
+      max_output_tokens: 30,
+      instructions:
         "Generate a concise 5-8 word title summarizing this conversation. Return only the title, no quotes or punctuation.",
-      messages: formatted,
+      input: formatted,
     });
 
-    const block = response.content[0];
-    const title =
-      block.type === "text" ? block.text.trim() : "New Chat";
+    const title = response.output_text.trim() || "New Chat";
     return NextResponse.json({ title });
   } catch (error) {
     console.error("Title generation failed:", error);

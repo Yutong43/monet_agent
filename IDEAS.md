@@ -22,7 +22,7 @@ Replace plain markdown chat with generative UI — render rich components inline
 Allow users to paste or upload screenshots (charts, earnings tables, analyst notes) into the chat. OCR the content and feed it to Monet as context. Useful for sharing TradingView charts, earnings screenshots, or analyst reports.
 
 - Image upload in chat input
-- OCR extraction (Claude vision or dedicated OCR)
+- OCR extraction (vision model or dedicated OCR)
 - Monet interprets the content and responds (e.g. "this chart shows a double bottom at $340")
 - Support for PDF uploads (earnings reports, 10-K snippets)
 
